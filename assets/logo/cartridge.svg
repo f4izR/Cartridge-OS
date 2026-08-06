@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 180" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient (Dark Blue/Gray) -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121824"/>
+      <stop offset="100%" stop-color="#0a0d14"/>
+    </linearGradient>
+
+    <!-- Main Cyan Gradient -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60EFFF"/>
+      <stop offset="100%" stop-color="#00A8E8"/>
+    </linearGradient>
+
+    <!-- Outer Frame Dark Blue Gradient -->
+    <linearGradient id="darkBlueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1B3A57"/>
+      <stop offset="100%" stop-color="#0B1D2F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="650" height="180" fill="url(#bgGrad)" rx="16"/>
+
+  <!-- LOGO MARK -->
+  <g transform="translate(35, 25)">
+    <!-- Backing/Housing Base -->
+    <path d="M 15,25 Q 25,10 50,15 L 75,25 Q 90,32 85,55 L 75,95 Q 70,115 50,115 L 20,110 Q 10,105 15,85 Z" fill="url(#darkBlueGrad)" stroke="#2C5270" stroke-width="3"/>
+    
+    <!-- Outer Cyan Shell (Play Button / Cartridge Shape) -->
+    <path d="M 35,15 
+             L 75,35 
+             C 105,55 105,75 75,95 
+             L 35,115 
+             C 20,122 10,110 10,95 
+             L 10,35 
+             C 10,20 20,8 35,15 Z" 
+          fill="none" 
+          stroke="url(#cyanGrad)" 
+          stroke-width="12" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Inner Grid / Controller D-Pad Symbol -->
+    <g stroke="url(#cyanGrad)" stroke-width="4" stroke-linecap="round">
+      <!-- Diamond Grid Lines -->
+      <line x1="42" y1="42" x2="68" y2="88" />
+      <line x1="68" y1="42" x2="42" y2="88" />
+      <!-- Inner boundary accent -->
+      <polygon points="55,38 75,65 55,92 35,65" fill="none" stroke="url(#cyanGrad)" stroke-width="3" opacity="0.6"/>
+    </g>
+  </g>
+
+  <!-- TYPOGRAPHY -->
+  <!-- "Cartridge" - Bold White Text -->
+  <text x="165" y="112" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="68" 
+        font-weight="800" 
+        fill="#FFFFFF" 
+        letter-spacing="-1.5">Cartridge</text>
+
+  <!-- "-os" - Cyan Text -->
+  <text x="475" y="112" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="68" 
+        font-weight="700" 
+        fill="url(#cyanGrad)" 
+        letter-spacing="-1">-os</text>
+</svg>

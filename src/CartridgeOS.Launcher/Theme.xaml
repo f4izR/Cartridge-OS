@@ -1,0 +1,72 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Brand -->
+    <Color x:Key="BrandCyanColor">#51E7ED</Color>
+    <Color x:Key="BrandBlueColor">#49C1ED</Color>
+    <Color x:Key="BrandDeepBlueColor">#168DDC</Color>
+    <SolidColorBrush x:Key="BrandCyanBrush" Color="{StaticResource BrandCyanColor}" />
+    <SolidColorBrush x:Key="BrandBlueBrush" Color="{StaticResource BrandBlueColor}" />
+    <SolidColorBrush x:Key="BrandDeepBlueBrush" Color="{StaticResource BrandDeepBlueColor}" />
+    <SolidColorBrush x:Key="BrandCyanHoverBrush" Color="#70F1F3" />
+    <SolidColorBrush x:Key="BrandCyanPressedBrush" Color="#39BFD2" />
+    <LinearGradientBrush x:Key="BrandGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource BrandCyanColor}" Offset="0" />
+        <GradientStop Color="{StaticResource BrandDeepBlueColor}" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Backgrounds -->
+    <SolidColorBrush x:Key="BackgroundBrush" Color="#0D1016" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#14171D" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#1B2028" />
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#242B35" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#303946" />
+    <SolidColorBrush x:Key="OverlayBackdropBrush" Color="#050C08" Opacity="0.82" />
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FBFBFB" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#BCC1C9" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#767D88" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="#071014" />
+
+    <!-- Status -->
+    <SolidColorBrush x:Key="SuccessBrush" Color="#45D69A" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#F3B84B" />
+    <SolidColorBrush x:Key="ErrorBrush" Color="#F05D68" />
+    <SolidColorBrush x:Key="InformationBrush" Color="#49C1ED" />
+
+    <!-- Selection / focus -->
+    <SolidColorBrush x:Key="SelectedTileBorderBrush" Color="#49C1ED" />
+    <SolidColorBrush x:Key="SelectedTileAccentBrush" Color="#51E7ED" Opacity="0.08" />
+    <SolidColorBrush x:Key="FocusGlowBrush" Color="#51E7ED" Opacity="0.30" />
+
+    <!-- Primary button -->
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource BrandCyanBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="18,10" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="8">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandCyanHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandCyanPressedBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
