@@ -207,6 +207,56 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
 
+        <!-- Steam/NVIDIA-app-style settings: a fixed-width category rail on the left (TabPanel), the
+             selected category's nested settings on the right. Add more categories later by adding
+             another TabItem below — each one is a self-contained "main heading" with its own nested
+             controls, same shape as the Background category. -->
+        <Style x:Key="SettingsTabControlStyle" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <DockPanel>
+                            <TabPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
+                            <ContentPresenter Margin="20,0,0,0" ContentSource="SelectedContent" />
+                        </DockPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="CategoryBg" CornerRadius="6" Padding="12,10" Margin="0,0,0,4">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="CategoryBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CategoryBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsSectionHeadingStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
         <Style x:Key="WindowControlButtonBase" TargetType="Button">
             <Setter Property="Width" Value="36" />
             <Setter Property="Height" Value="36" />
@@ -346,31 +396,37 @@
         </Grid>
 
         <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
-        <Border Grid.Column="1" Width="320" Padding="24"
+        <Border Grid.Column="1" Width="460" Padding="24"
                 Background="{StaticResource SurfaceRaisedBrush}"
                 BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}"
                 Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
                            FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
 
-                <TextBlock Text="Background" Foreground="{StaticResource TextSecondaryBrush}"
-                           FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10" />
+                <TabControl Style="{StaticResource SettingsTabControlStyle}">
+                    <!-- One category per TabItem. Add the next one (e.g. "Interface", "Controller") the same way. -->
+                    <TabItem Header="Wallpaper" Style="{StaticResource SettingsTabItemStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Background" Style="{StaticResource SettingsSectionHeadingStyle}" />
 
-                <RadioButton Content="Selected game's artwork" GroupName="WallpaperMode"
-                             Style="{StaticResource SettingsRadioStyle}"
-                             IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelectedGameArtwork}" />
-                <RadioButton Content="Custom image" GroupName="WallpaperMode"
-                             Style="{StaticResource SettingsRadioStyle}"
-                             IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=CustomImage}" />
+                            <RadioButton Content="Selected game's artwork" GroupName="WallpaperMode"
+                                         Style="{StaticResource SettingsRadioStyle}"
+                                         IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelectedGameArtwork}" />
+                            <RadioButton Content="Custom image" GroupName="WallpaperMode"
+                                         Style="{StaticResource SettingsRadioStyle}"
+                                         IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=CustomImage}" />
 
-                <Button Content="Browse..." Command="{Binding ChooseWallpaperCommand}"
-                        Style="{StaticResource PrimaryButtonStyle}"
-                        HorizontalAlignment="Left" Margin="0,4,0,6" />
-                <TextBlock Text="{Binding CustomWallpaperPath}"
-                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
+                            <Button Content="Browse..." Command="{Binding ChooseWallpaperCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    HorizontalAlignment="Left" Margin="0,4,0,6" />
+                            <TextBlock Text="{Binding CustomWallpaperPath}"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
         </Border>
     </Grid>
 </Window>
