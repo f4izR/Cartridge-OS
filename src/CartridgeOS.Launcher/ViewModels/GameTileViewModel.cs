@@ -32,6 +32,12 @@ public sealed partial class GameTileViewModel : ViewModelBase
 
     public void MarkPlayedNow() => LastPlayedUtc = DateTime.UtcNow;
 
+    public void SetArtworkPath(string artworkPath)
+    {
+        _game.ArtworkPath = artworkPath;
+        _ = LoadArtworkAsync();
+    }
+
     private async Task LoadArtworkAsync()
     {
         if (string.IsNullOrEmpty(_game.ArtworkPath)) return;

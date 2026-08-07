@@ -59,6 +59,16 @@ public sealed class GameDatabase
         command.ExecuteNonQuery();
     }
 
+    public void UpdateArtworkPath(int id, string artworkPath)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE Games SET ArtworkPath = $artwork WHERE Id = $id;";
+        command.Parameters.AddWithValue("$artwork", artworkPath);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
     public List<Game> GetAllGames()
     {
         using var connection = OpenConnection();

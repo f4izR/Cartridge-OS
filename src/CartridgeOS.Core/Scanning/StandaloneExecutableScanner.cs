@@ -21,13 +21,27 @@ public sealed class StandaloneExecutableScanner
         "InstallShield Installation Information", "Uninstall Information",
     ];
 
-    private static readonly string[] DefaultScanRoots =
-    [
-        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-    ];
+    public List<Game> Scan() => Scan(DefaultScanRoots());
 
-    public List<Game> Scan() => Scan(DefaultScanRoots);
+    /// <summary>
+    /// Program Files on the system drive, plus "Program Files" and "Games" folders on every
+    /// other fixed drive — covers the common case of a game library installed on a second disk.
+    /// </summary>
+    private static IEnumerable<string> DefaultScanRoots()
+    {
+        yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+            if (drive.RootDirectory.FullName.StartsWith(Path.GetPathRoot(Environment.SystemDirectory)!, StringComparison.OrdinalIgnoreCase))
+                continue; // system drive already covered above
+
+            yield return Path.Combine(drive.RootDirectory.FullName, "Program Files");
+            yield return Path.Combine(drive.RootDirectory.FullName, "Games");
+        }
+    }
 
     /// <summary>Overload for testing against a synthetic directory tree instead of real Program Files.</summary>
     public List<Game> Scan(IEnumerable<string> roots)

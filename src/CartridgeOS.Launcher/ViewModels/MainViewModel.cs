@@ -3,11 +3,13 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using CartridgeOS.Core;
 using CartridgeOS.Core.Data;
 using CartridgeOS.Core.Models;
 using CartridgeOS.Core.Scanning;
+using CartridgeOS.Launcher.Services;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 
@@ -16,9 +18,11 @@ namespace CartridgeOS.Launcher.ViewModels;
 public sealed class MainViewModel : ViewModelBase
 {
     private const int MaxRecentGames = 10;
+    private const int BackgroundDecodeWidth = 1920; // full-screen backdrop, not a tile — decode much wider than GameTileViewModel's 200px
     private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(15); // ponytail: hardcoded until there's a settings screen to make it configurable
 
     private readonly GameDatabase _db;
+    private readonly AppSettings _settings = SettingsStore.Load();
     private readonly DispatcherTimer _rescanTimer;
 
     public ObservableCollection<GameTileViewModel> Games { get; } = [];
@@ -38,9 +42,42 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _selectedGame, value);
     }
 
+    private bool _isSettingsOpen;
+    public bool IsSettingsOpen
+    {
+        get => _isSettingsOpen;
+        set => SetProperty(ref _isSettingsOpen, value);
+    }
+
+    public WallpaperMode WallpaperMode
+    {
+        get => _settings.WallpaperMode;
+        set
+        {
+            if (_settings.WallpaperMode == value) return;
+            _settings.WallpaperMode = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    public bool IsUsingGameArtworkBackground => WallpaperMode == WallpaperMode.SelectedGameArtwork;
+
+    public string? CustomWallpaperPath => _settings.CustomWallpaperPath;
+
+    private ImageSource? _customWallpaperImage;
+    public ImageSource? CustomWallpaperImage
+    {
+        get => _customWallpaperImage;
+        private set => SetProperty(ref _customWallpaperImage, value);
+    }
+
     public ICommand AddGameCommand { get; }
     public ICommand ScanForGamesCommand { get; }
     public ICommand FindMoreGamesCommand { get; }
+    public ICommand ToggleSettingsCommand { get; }
+    public ICommand ChooseWallpaperCommand { get; }
 
     public MainViewModel()
     {
@@ -53,11 +90,22 @@ public sealed class MainViewModel : ViewModelBase
         AddGameCommand = new RelayCommand(AddGame);
         ScanForGamesCommand = new RelayCommand(ScanForGames);
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
+        ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
+        ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
+
+        if (!string.IsNullOrEmpty(_settings.CustomWallpaperPath))
+            _ = LoadCustomWallpaperAsync(_settings.CustomWallpaperPath);
 
         SeedIfEmpty(_db); // ponytail: placeholder titles (some with fake play history) until the game scanner (V2) exists, delete this once real games populate the db
 
         foreach (var game in _db.GetAllGames())
-            Games.Add(new GameTileViewModel(game));
+        {
+            var tile = new GameTileViewModel(game);
+            Games.Add(tile);
+
+            if (string.IsNullOrEmpty(game.ArtworkPath))
+                _ = FetchArtworkInBackgroundAsync(game, tile);
+        }
 
         SelectedGame = Games.FirstOrDefault();
         RebuildRecentGames();
@@ -116,6 +164,28 @@ public sealed class MainViewModel : ViewModelBase
         SelectedGame = tile;
     }
 
+    private async Task ChooseWallpaperAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Choose a wallpaper image",
+            Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.CustomWallpaperPath = dialog.FileName;
+        _settings.WallpaperMode = WallpaperMode.CustomImage;
+        SettingsStore.Save(_settings);
+        OnPropertyChanged(nameof(WallpaperMode));
+        OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
+        OnPropertyChanged(nameof(CustomWallpaperPath));
+
+        await LoadCustomWallpaperAsync(dialog.FileName);
+    }
+
+    private async Task LoadCustomWallpaperAsync(string path) =>
+        CustomWallpaperImage = await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+
     private void ScanForGames() => ImportScannedGames(ScanTrustedLauncherSources());
 
     // Runs the same trusted-launcher scan the button does, but off the UI thread (registry/file
@@ -167,8 +237,23 @@ public sealed class MainViewModel : ViewModelBase
             if (existingExePaths.Contains(game.ExecutablePath)) continue;
 
             game.Id = _db.AddGame(game);
-            Games.Add(new GameTileViewModel(game));
+            var tile = new GameTileViewModel(game);
+            Games.Add(tile);
+
+            if (string.IsNullOrEmpty(game.ArtworkPath))
+                _ = FetchArtworkInBackgroundAsync(game, tile);
         }
+    }
+
+    // Artwork isn't required for a game to be usable, so this runs fire-and-forget after the tile
+    // is already showing its placeholder rather than making the scan wait on network calls.
+    private async Task FetchArtworkInBackgroundAsync(Game game, GameTileViewModel tile)
+    {
+        string? artworkPath = await ArtworkFetcher.FetchAndCacheAsync(game);
+        if (artworkPath is null) return;
+
+        _db.UpdateArtworkPath(game.Id, artworkPath);
+        tile.SetArtworkPath(artworkPath);
     }
 
     private static void SeedIfEmpty(GameDatabase db)

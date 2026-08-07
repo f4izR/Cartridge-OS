@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:CartridgeOS.Launcher"
         xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel"
+        xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
         mc:Ignorable="d"
         Title="Cartridge OS"
         Icon="Assets/app-icon.png"
@@ -196,6 +197,15 @@
         </Style>
 
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+        <conv:EnumToBooleanConverter x:Key="EnumToBoolean" />
+
+        <Style x:Key="SettingsRadioStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
 
         <Style x:Key="WindowControlButtonBase" TargetType="Button">
             <Setter Property="Width" Value="36" />
@@ -236,68 +246,131 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <Grid Grid.Row="0" Margin="24,20,24,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Image Grid.Column="0" Source="Assets/logo-with-name.png" Height="40"
-                   HorizontalAlignment="Left" Stretch="Uniform" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
-                        Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
-                <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
-                        Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
-                <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
-                        Style="{StaticResource PrimaryButtonStyle}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
-                <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click"
-                        Style="{StaticResource MinimizeButtonStyle}" ToolTip="Minimize" />
-                <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Close_Click"
-                        Style="{StaticResource CloseButtonStyle}" ToolTip="Exit" />
-            </StackPanel>
-        </Grid>
+        <!-- PS5-menu-style backdrop: either the selected game's artwork or a user-picked wallpaper, blurred and dimmed behind everything else. -->
+        <Image x:Name="BackgroundArt" Grid.ColumnSpan="2"
+               Source="{Binding SelectedGame.Artwork}"
+               Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource BoolToVisibility}}"
+               Stretch="UniformToFill" Opacity="0.85" IsHitTestVisible="False">
+            <Image.Effect>
+                <BlurEffect Radius="10" />
+            </Image.Effect>
+        </Image>
+        <Image x:Name="CustomBackgroundArt" Grid.ColumnSpan="2"
+               Source="{Binding CustomWallpaperImage}"
+               Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource InverseBoolToVisibility}}"
+               Stretch="UniformToFill" Opacity="0.95" IsHitTestVisible="False">
+            <Image.Effect>
+                <BlurEffect Radius="20" />
+            </Image.Effect>
+        </Image>
+        <Border Grid.ColumnSpan="2" IsHitTestVisible="False">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#400E1420" Offset="0" />
+                    <GradientStop Color="#900E1420" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
 
-        <StackPanel Grid.Row="1" Margin="24,0,24,0"
-                    Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="Recent" Foreground="{StaticResource TextSecondaryBrush}"
-                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4" />
-            <ListBox ItemsSource="{Binding RecentGames}"
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="24,20,24,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Source="Assets/logo-with-name.png" Height="40"
+                       HorizontalAlignment="Left" Stretch="Uniform" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
+                    <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
+                    <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                    <Button Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Command="{Binding ToggleSettingsCommand}"
+                            Style="{StaticResource MinimizeButtonStyle}" ToolTip="Settings" />
+                    <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click"
+                            Style="{StaticResource MinimizeButtonStyle}" ToolTip="Minimize" />
+                    <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Close_Click"
+                            Style="{StaticResource CloseButtonStyle}" ToolTip="Exit" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Grid.Row="1" Margin="24,0,24,0"
+                        Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Recent" Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <ListBox ItemsSource="{Binding RecentGames}"
+                         SelectedItem="{Binding SelectedGame}"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource RecentTileStyle}"
+                         MouseDoubleClick="RecentGame_DoubleClick">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                </ListBox>
+            </StackPanel>
+
+            <ListBox x:Name="GameGrid" Grid.Row="2"
+                     ItemsSource="{Binding Games}"
                      SelectedItem="{Binding SelectedGame}"
                      Background="Transparent" BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                     ItemContainerStyle="{StaticResource RecentTileStyle}"
-                     MouseDoubleClick="RecentGame_DoubleClick">
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     ItemContainerStyle="{StaticResource GameTileStyle}">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" />
+                        <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
                     </ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
             </ListBox>
-        </StackPanel>
+        </Grid>
 
-        <ListBox x:Name="GameGrid" Grid.Row="2"
-                 ItemsSource="{Binding Games}"
-                 SelectedItem="{Binding SelectedGame}"
-                 Background="Transparent" BorderThickness="0"
-                 ScrollViewer.CanContentScroll="True"
-                 VirtualizingPanel.IsVirtualizing="True"
-                 VirtualizingPanel.VirtualizationMode="Recycling"
-                 ItemContainerStyle="{StaticResource GameTileStyle}">
-            <ListBox.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
-        </ListBox>
+        <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
+        <Border Grid.Column="1" Width="320" Padding="24"
+                Background="{StaticResource SurfaceRaisedBrush}"
+                BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}"
+                Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
+                           FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
+
+                <TextBlock Text="Background" Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10" />
+
+                <RadioButton Content="Selected game's artwork" GroupName="WallpaperMode"
+                             Style="{StaticResource SettingsRadioStyle}"
+                             IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelectedGameArtwork}" />
+                <RadioButton Content="Custom image" GroupName="WallpaperMode"
+                             Style="{StaticResource SettingsRadioStyle}"
+                             IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=CustomImage}" />
+
+                <Button Content="Browse..." Command="{Binding ChooseWallpaperCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        HorizontalAlignment="Left" Margin="0,4,0,6" />
+                <TextBlock Text="{Binding CustomWallpaperPath}"
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

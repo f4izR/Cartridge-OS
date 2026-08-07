@@ -58,7 +58,14 @@ public sealed class SteamScanner
 
     private static string? FindArtwork(string steamPath, string appId)
     {
-        string path = Path.Combine(steamPath, "appcache", "librarycache", $"{appId}_library_600x900.jpg");
-        return File.Exists(path) ? path : null;
+        string cacheDir = Path.Combine(steamPath, "appcache", "librarycache");
+
+        // Steam clients since ~2022 nest images under a per-appid folder; older clients wrote a flat
+        // "{appid}_library_600x900.jpg" file directly in librarycache. Check both.
+        string nested = Path.Combine(cacheDir, appId, "library_600x900.jpg");
+        if (File.Exists(nested)) return nested;
+
+        string flat = Path.Combine(cacheDir, $"{appId}_library_600x900.jpg");
+        return File.Exists(flat) ? flat : null;
     }
 }
