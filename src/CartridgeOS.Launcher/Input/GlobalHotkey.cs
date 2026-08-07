@@ -25,10 +25,13 @@ public sealed class GlobalHotkey : IDisposable
 
     public event Action? Pressed;
 
-    /// <summary>Window must already have a native handle (call after it's shown/loaded).</summary>
+    /// <summary>
+    /// Works with a window that's never shown (e.g. a hidden core window kept alive for the app's
+    /// whole session) — EnsureHandle forces native handle creation without requiring Show().
+    /// </summary>
     public GlobalHotkey(Window window)
     {
-        IntPtr hwnd = new WindowInteropHelper(window).Handle;
+        IntPtr hwnd = new WindowInteropHelper(window).EnsureHandle();
         _source = HwndSource.FromHwnd(hwnd) ?? throw new InvalidOperationException("Window has no native handle yet.");
         _source.AddHook(WndProc);
         RegisterHotKey(hwnd, HotkeyId, ModControl | ModShift, VkO); // Ctrl+Shift+O

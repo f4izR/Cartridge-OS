@@ -8,15 +8,15 @@ namespace CartridgeOS.Core.Ipc;
 /// request then closes, so callers don't need to manage a long-lived duplex session.
 /// One well-known pipe name shared by every CartridgeOS process.
 /// </summary>
-public sealed class CartridgeOsPipeServer(Func<PipeRequest, PipeResponse> handleRequest)
+public sealed class CartridgeOsPipeServer(Func<PipeRequest, PipeResponse> handleRequest, string pipeName = CartridgeOsPipeServer.DefaultPipeName)
 {
-    public const string PipeName = "CartridgeOS.IPC";
+    public const string DefaultPipeName = "CartridgeOS.IPC";
 
     public async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            using var pipe = new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
             try
             {
                 await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);

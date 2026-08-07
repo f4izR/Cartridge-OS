@@ -1,5 +1,4 @@
-using System.ComponentModel;
-using System.Diagnostics;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media.Animation;
 using System.Windows.Input;
@@ -9,6 +8,11 @@ using CartridgeOS.Launcher.ViewModels;
 
 namespace CartridgeOS.Launcher;
 
+/// <summary>
+/// Disposable UI: created and destroyed by App on demand, never kept resident just to avoid a
+/// recreate. Owns nothing that needs to survive its own closing — gamepad/hotkey listeners,
+/// running-game tracking, overlay, and Discord presence all live in App instead. See progress.md.
+/// </summary>
 public partial class MainWindow : Window
 {
     // Must match the tile Width + 2*Margin set in the ItemContainerStyle in MainWindow.xaml.
@@ -18,15 +22,10 @@ public partial class MainWindow : Window
     private const double BackgroundArtOpacity = 0.85;
     private const double CustomBackgroundArtOpacity = 0.95;
 
-    private readonly GamepadWatcher _gamepad = new();
-    private readonly MouseEmulator _mouse = new();
-    private GlobalHotkey? _overlayHotkey;
-    private OverlayWindow? _overlayWindow;
-    private Process? _runningGameProcess;
-    private string? _runningGameTitle;
-    private readonly DiscordRichPresence _discord = new();
+    /// <summary>Read by App right as this window closes, to remember what to re-select next time it opens.</summary>
+    public int? CurrentSelectedGameId => ((MainViewModel)DataContext).SelectedGame?.Id;
 
-    public MainWindow()
+    public MainWindow(int? restoreSelectedGameId = null)
     {
         InitializeComponent();
         var vm = new MainViewModel();
@@ -45,36 +44,24 @@ public partial class MainWindow : Window
             target?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, TimeSpan.FromMilliseconds(250)));
         };
 
+        if (restoreSelectedGameId is { } id)
+        {
+            var restored = vm.Games.FirstOrDefault(g => g.Id == id);
+            if (restored is not null) vm.SelectedGame = restored;
+        }
+
         Loaded += (_, _) =>
         {
-            _gamepad.ButtonPressed += OnGamepadButton;
-            _gamepad.RightStickMoved += _mouse.Move;
-            _gamepad.RightTriggerChanged += _mouse.SetLeftButtonDown;
-            _gamepad.Start();
-
             // Windows' foreground-lock can leave a debugger-launched window without keyboard focus. Force it.
             Activate();
             GameGrid.Focus();
-
-            // Needs a real window handle, hence wiring it here rather than the constructor.
-            _overlayHotkey = new GlobalHotkey(this);
-            _overlayHotkey.Pressed += ToggleOverlay;
-
-            _ = _discord.ConnectAsync(); // no-op if Discord isn't running; safe to fire-and-forget
         };
-        Closed += (_, _) =>
-        {
-            _gamepad.Stop();
-            _overlayHotkey?.Dispose();
-            _discord.Dispose();
-            ((MainViewModel)DataContext).StopBackgroundRescanning();
-        };
+        Closed += (_, _) => vm.StopBackgroundRescanning();
 
         // Keyboard equivalents of gamepad nav/A/Y — don't rely on native ListBox/VirtualizingWrapPanel arrow-key
         // handling, it only moved selection correctly for Up/Down, not Left/Right.
         PreviewKeyDown += (_, e) =>
         {
-            var vm = (MainViewModel)DataContext;
             GamepadButton? button = e.Key switch
             {
                 Key.Left => GamepadButton.DPadLeft,
@@ -86,18 +73,15 @@ public partial class MainWindow : Window
                 _ => null,
             };
             if (!button.HasValue) return;
-            HandleInput(vm, button.Value);
+            HandleGamepadButton(button.Value);
             e.Handled = true; // prevent native ListBox arrow-key handling from also acting on this keypress
         };
     }
 
-    private void OnGamepadButton(GamepadButton button)
+    /// <summary>Called both by local keyboard handling above and by App forwarding real gamepad button presses (App owns the GamepadWatcher).</summary>
+    public void HandleGamepadButton(GamepadButton button)
     {
-        Dispatcher.BeginInvoke(() => HandleInput((MainViewModel)DataContext, button));
-    }
-
-    private void HandleInput(MainViewModel vm, GamepadButton button)
-    {
+        var vm = (MainViewModel)DataContext;
         if (vm.Games.Count > 0)
         {
             int columns = Math.Max(1, (int)(GameGrid.ActualWidth / TileFootprintWidth));
@@ -121,7 +105,6 @@ public partial class MainWindow : Window
 
         if (button == GamepadButton.A) LaunchSelected(vm, vm.SelectedGame);
         if (button == GamepadButton.Y && vm.AddGameCommand.CanExecute(null)) vm.AddGameCommand.Execute(null);
-        if (button == GamepadButton.Start) ToggleOverlay(); // Xbox "Menu"/PS "Options" — same button that pauses in-game, so it's the natural fit
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -134,91 +117,9 @@ public partial class MainWindow : Window
         LaunchSelected(vm, vm.SelectedGame);
     }
 
-    private void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
+    private static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
     {
-        // ponytail: no launch-failure UI yet (missing exe, permissions) — add when game launching is its own task.
-        if (string.IsNullOrEmpty(game?.ExecutablePath)) return;
-        SoundService.PlayConfirm();
-
-        var process = Process.Start(new ProcessStartInfo(game.ExecutablePath) { UseShellExecute = true });
-        vm.RecordPlayed(game);
-
-        // Doesn't need the Process handle, so this runs even for Steam/Xbox shell launches (where
-        // Process.Start returns null below) — only downside there is we can't auto-clear it on exit.
-        _ = _discord.SetActivityAsync(game.Title, DateTimeOffset.UtcNow);
-
-        // Steam/Xbox launches go through steam://, shell:appsFolder\... — the shell handles those
-        // itself and Process.Start returns null, so there's no process to track or overlay for.
-        if (process is null) return;
-
-        _runningGameProcess = process;
-        _runningGameTitle = game.Title;
-        WindowState = WindowState.Minimized; // this window is Topmost — stay minimized or it'd sit on top of the game
-
-        try
-        {
-            process.EnableRaisingEvents = true;
-            process.Exited += (_, _) => Dispatcher.BeginInvoke(OnGameExited);
-        }
-        catch (InvalidOperationException)
-        {
-            // already exited before we could attach — nothing left to track
-        }
-    }
-
-    private void OnGameExited()
-    {
-        _runningGameProcess = null;
-        _runningGameTitle = null;
-        CloseOverlay();
-        WindowState = WindowState.Maximized;
-        Activate();
-        _ = _discord.ClearActivityAsync();
-    }
-
-    // Ctrl+Shift+O, fires even without focus (see GlobalHotkey) — only meaningful while a game we
-    // launched (and can therefore track) is running; ignored otherwise.
-    private void ToggleOverlay()
-    {
-        if (_runningGameProcess is null) return;
-
-        if (_overlayWindow is not null)
-        {
-            CloseOverlay();
-            return;
-        }
-
-        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame);
-        _overlayWindow = new OverlayWindow(overlayVm);
-        _overlayWindow.Closed += (_, _) => _overlayWindow = null;
-        _overlayWindow.Show();
-    }
-
-    private void CloseOverlay()
-    {
-        _overlayWindow?.Close();
-        _overlayWindow = null;
-    }
-
-    private void ReturnToLauncher()
-    {
-        CloseOverlay();
-        WindowState = WindowState.Maximized;
-        Activate();
-    }
-
-    private void QuitRunningGame()
-    {
-        // OnGameExited (wired via process.Exited) handles clearing state and restoring the window
-        // once the kill actually takes effect — this just closes the overlay immediately for feedback.
-        try
-        {
-            _runningGameProcess?.Kill();
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
-        {
-            // already exited, or we don't have permission to kill it — nothing more to do
-        }
-        CloseOverlay();
+        if (game is null) return;
+        ((App)Application.Current).LaunchGame(vm, game);
     }
 }

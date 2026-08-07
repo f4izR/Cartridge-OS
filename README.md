@@ -53,11 +53,11 @@ Fullscreen, hardware-accelerated, themeable interface with sound effects and a h
 
 ### Starting Cartridge OS
 
-Run `CartridgeOS.Tray.exe` first — it sits in the system tray and is meant to stay running in the background. Right-click (or double-click) the tray icon to open the fullscreen launcher.
+Run `CartridgeOS.Launcher.exe`. It's a single-instance app: the first launch starts a lightweight background core (tray icon + controller/hotkey listener) and opens the fullscreen launcher window; running the exe again while it's already open just brings that window back to the front instead of starting a second copy.
 
-You can also run `CartridgeOS.Launcher.exe` directly if you just want the fullscreen UI without the tray icon.
+Closing the launcher window (the X button) doesn't quit Cartridge OS — it destroys the window to free its memory and keeps the tray icon running in the background. Reopen it from the tray icon (click or double-click), or by running the exe again.
 
-The Launcher opens fullscreen, borderless, and always-on-top — that's intentional, it's built to feel like a console dashboard rather than a desktop app.
+The launcher window opens fullscreen, borderless, and always-on-top — that's intentional, it's built to feel like a console dashboard rather than a desktop app.
 
 ### Building your library
 
@@ -76,20 +76,20 @@ Three ways to add games, all in the header bar:
 | Add a game | Y | Insert | Click "+ Add Game" |
 | Move the cursor | Right stick | — | — |
 | Click | Right trigger | — | Left mouse button |
-| Minimize / Exit | — (not bound yet) | Alt+F4 | Header buttons (top-right) |
+| Toggle overlay | Start | Ctrl+Shift+O | — |
+| Minimize / close launcher | — | Alt+F4 (closes) | Header buttons (top-right) |
 
 The **Recent** row (above the main grid, only shown once you've launched something) is the fastest way back into whatever you played last — double-click or navigate to a tile there and press A/Enter, same as the main grid.
 
 ### The tray icon
 
-Right-click it for:
-- **Open Launcher** — brings up the fullscreen UI (also works via double-click)
-- **Service Status** — reports whether the background service is running and how many games are in your library
-- **Exit** — closes the tray icon (the Launcher, if open, keeps running independently)
+Click or right-click it:
+- **Open Cartridge OS** — brings back the launcher window (also works via left-click or double-click on the icon itself)
+- **Exit Cartridge OS** — fully quits: removes the tray icon, stops the controller/hotkey listeners, and closes the launcher if it's open
 
 ### Known limitations (current build)
 
-- Exiting/minimizing only works via mouse or Alt+F4 — no controller button does it yet.
+- Minimizing only works via mouse (header button) — no controller button does it yet. Exiting fully is controller-free by design (it goes through the tray icon), and closing the launcher window without quitting works from the controller Start button (toggles the in-game overlay, which has its own Return/Quit options) or the header's close button.
 - The scanners for GOG, Ubisoft Connect, EA App, Battle.net, and Xbox/Store are best-effort (no documented format to read, unlike Steam/Epic/Riot) — if one misses a game, use **+ Add Game**.
 - Right-stick mouse emulation is currently limited to your primary monitor.
 - Sound effects are placeholder tones, not final sound design.
@@ -145,11 +145,8 @@ Requires the .NET 10 SDK and Windows, since WPF/XInput/named pipes are Windows-o
 # Build everything
 dotnet build
 
-# Run the fullscreen launcher (the main UI)
+# Run Cartridge OS (single process: tray core + launcher window; single-instance, see context.md)
 dotnet run --project src/CartridgeOS.Launcher
-
-# Run the system-tray app (icon + "Open Launcher"/"Exit" menu)
-dotnet run --project src/CartridgeOS.Tray
 
 # Run the background service (hosts a named-pipe IPC server; scanning/controller ownership hasn't moved here yet — see context.md)
 dotnet run --project src/CartridgeOS.Service
@@ -166,7 +163,9 @@ The Launcher is controller-first, but every gamepad action has a keyboard equiva
 | Y | Insert | Open the add-game flow (exe + artwork picker) |
 | Right stick | — | Moves the real system mouse cursor (no keyboard equivalent — just use the mouse) |
 | Right trigger | — | Left-click (no keyboard equivalent) |
-| — | Alt+F4 | Exit (also has on-screen Minimize/Close buttons in the header, mouse-only — no gamepad binding yet, see `production-readiness.md`) |
+| Start | — | Toggle the in-game overlay (Return to Cartridge OS / Quit Game) |
+| — | Ctrl+Shift+O | Same as controller Start — toggles the overlay |
+| — | Alt+F4 | Closes the launcher window (doesn't quit — tray keeps running). Full quit is via the tray icon's Exit. Header also has on-screen Minimize/Close buttons, mouse-only. |
 
 Mouse works normally (click tiles, click the header buttons).
 
@@ -214,7 +213,7 @@ dotnet run --project src/CartridgeOS.Launcher -- --self-check-xbox
 - "Find More Games" (header button) looks for games not registered with any launcher at all — standalone executables (folder + exe guessing) plus Xbox app/PC Game Pass/Microsoft Store games (via `Get-AppxPackage`). Both are pure heuristics with no reliable "this is actually a game" signal, so results go through a confirmation dialog before anything's added, unlike "Scan for Games". Has no concept of a game's origin or license status; it finds game-shaped things, nothing more. Not tested against a real Xbox/Store install — no such install available during development.
 - The 7 trusted launcher scanners also re-run automatically every 15 minutes in the background (never the heuristic standalone scanner) — no action needed, new installs show up on their own.
 - Navigating the grid and launching a game play short sound effects. These are placeholder procedurally-generated tones (no real sound design exists yet) — replace `Assets/Sounds/*.wav` with real SFX whenever they're available; nothing else needs to change.
-- Tray's "Service Status" menu item talks to the Service over a real named pipe (`Core/Ipc/`) and reports whether it's running plus the current game count. Scanning/controller logic still runs in the Launcher, not the Service — the pipe exists as working infrastructure, not a full architecture migration yet (see context.md if you're picking that up).
+- The named-pipe transport (`Core/Ipc/`) is used for two independent things: `--ipc-ping`/the standalone Service's `Ping`/`GetGameCount` commands, and (separately, its own pipe name) single-instance signaling — a second launch of the Launcher signals the running instance to show itself rather than starting a duplicate. Scanning/controller logic still runs in the Launcher, not the Service — the Service's pipe exists as working infrastructure, not a full architecture migration yet (see context.md if you're picking that up).
 - First run seeds a handful of placeholder games (no real executable) into `%LocalAppData%\CartridgeOS\games.db` so the grid/recent-row aren't empty during development. Delete that file to reset to a clean state.
 - See `progress.md` for what's actually built, `production-readiness.md` for what's left before shipping, and `context.md` for orientation if you're a fresh agent/contributor picking this up.
 

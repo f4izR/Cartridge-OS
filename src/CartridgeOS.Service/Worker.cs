@@ -22,7 +22,7 @@ public class Worker : BackgroundService
 
         var server = new CartridgeOsPipeServer(request => HandleRequest(request, db));
 
-        _logger.LogInformation("IPC server listening on pipe '{PipeName}'", CartridgeOsPipeServer.PipeName);
+        _logger.LogInformation("IPC server listening on pipe '{PipeName}'", CartridgeOsPipeServer.DefaultPipeName);
         await server.RunAsync(stoppingToken);
     }
 

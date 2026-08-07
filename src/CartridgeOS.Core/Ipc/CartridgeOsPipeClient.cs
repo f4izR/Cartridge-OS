@@ -5,12 +5,12 @@ namespace CartridgeOS.Core.Ipc;
 
 public sealed class CartridgeOsPipeClient
 {
-    /// <summary>Returns null if the Service isn't running, the pipe is busy, or the request timed out — never throws.</summary>
-    public async Task<PipeResponse?> SendAsync(PipeRequest request, int timeoutMs = 2000)
+    /// <summary>Returns null if nothing's listening on the pipe, it's busy, or the request timed out — never throws.</summary>
+    public async Task<PipeResponse?> SendAsync(PipeRequest request, string pipeName = CartridgeOsPipeServer.DefaultPipeName, int timeoutMs = 2000)
     {
         try
         {
-            using var pipe = new NamedPipeClientStream(".", CartridgeOsPipeServer.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             using var cts = new CancellationTokenSource(timeoutMs);
 
             await pipe.ConnectAsync(timeoutMs, cts.Token).ConfigureAwait(false);

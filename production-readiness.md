@@ -3,7 +3,7 @@
 What's left before this ships to a real user's PC, beyond feature completion. Update as items are closed or new gaps are found.
 
 ## Packaging & install
-- [ ] Installer (MSI/MSIX or Inno Setup) that registers the Service, installs Tray + Launcher, sets up autostart
+- [ ] Installer (MSI/MSIX or Inno Setup) that registers the Service, installs Launcher (now the single tray+UI process — Tray project was merged in, see progress.md 2026-08-07), sets up autostart
 - [ ] Clean uninstall (removes service, registry entries, scheduled tasks)
 - [ ] Code signing (avoid SmartScreen warnings)
 - [ ] Auto-update mechanism (or explicit decision to skip for V1)
@@ -12,7 +12,7 @@ What's left before this ships to a real user's PC, beyond feature completion. Up
 - [ ] Service crash recovery / restart policy
 - [ ] Launcher crash doesn't take down the Service or leave the machine unusable (no keyboard/mouse in fullscreen controller mode)
 - [ ] Graceful handling of games that fail to launch (missing exe, permissions)
-- [ ] Named-pipe reconnect logic if Tray/Launcher starts before Service is ready
+- [ ] Named-pipe reconnect logic if Launcher starts before Service is ready
 
 ## Performance
 - [ ] Cold boot time to fullscreen UI measured and acceptable
