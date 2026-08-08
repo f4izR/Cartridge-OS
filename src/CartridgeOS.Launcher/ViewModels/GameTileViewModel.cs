@@ -12,6 +12,10 @@ public sealed partial class GameTileViewModel : ViewModelBase
     private const int ArtworkDecodeWidth = 200;
 
     private readonly Game _game;
+    private string? _previousArtworkPath;
+
+    /// <summary>Whether TryRevertArtwork has something to restore — drives the "Revert to Previous Artwork" menu item's enabled state.</summary>
+    public bool HasPreviousArtwork { get; private set; }
 
     public GameTileViewModel(Game game)
     {
@@ -30,12 +34,42 @@ public sealed partial class GameTileViewModel : ViewModelBase
     [ObservableProperty]
     private DateTime? _lastPlayedUtc;
 
+    /// <summary>Drives the tile's "Launching..." overlay — set by App.LaunchGame, the single launch entry point.</summary>
+    [ObservableProperty]
+    private bool _isLaunching;
+
     public void MarkPlayedNow() => LastPlayedUtc = DateTime.UtcNow;
 
     public void SetArtworkPath(string artworkPath)
     {
+        _previousArtworkPath = _game.ArtworkPath;
+        HasPreviousArtwork = true;
         _game.ArtworkPath = artworkPath;
         _ = LoadArtworkAsync();
+    }
+
+    /// <summary>
+    /// Single-level undo — restores whatever artwork this game had immediately before its most recent
+    /// change, then forgets it (not a full history stack; a second call with nothing new set does nothing).
+    /// Returns true and outputs the restored path (possibly null, if the game had no artwork before) on success.
+    /// </summary>
+    public bool TryRevertArtwork(out string? restoredPath)
+    {
+        if (!HasPreviousArtwork)
+        {
+            restoredPath = null;
+            return false;
+        }
+
+        restoredPath = _previousArtworkPath;
+        _game.ArtworkPath = restoredPath;
+        HasPreviousArtwork = false;
+        _previousArtworkPath = null;
+
+        if (string.IsNullOrEmpty(restoredPath)) Artwork = null; // nothing to load — clear the tile explicitly, LoadArtworkAsync leaves Artwork untouched on a null path
+        else _ = LoadArtworkAsync();
+
+        return true;
     }
 
     private async Task LoadArtworkAsync()

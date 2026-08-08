@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using System.Windows.Input;
 using CartridgeOS.Launcher.Input;
@@ -56,56 +57,118 @@ public partial class MainWindow : Window
             Activate();
             GameGrid.Focus();
         };
-        Closed += (_, _) => vm.StopBackgroundRescanning();
+        Closed += (_, _) =>
+        {
+            vm.StopBackgroundRescanning();
+            vm.StopStatusUpdates();
+        };
 
         // Keyboard equivalents of gamepad nav/A/Y — don't rely on native ListBox/VirtualizingWrapPanel arrow-key
         // handling, it only moved selection correctly for Up/Down, not Left/Right.
         PreviewKeyDown += (_, e) =>
         {
-            GamepadButton? button = e.Key switch
+            GamepadAction? action = e.Key switch
             {
-                Key.Left => GamepadButton.DPadLeft,
-                Key.Right => GamepadButton.DPadRight,
-                Key.Up => GamepadButton.DPadUp,
-                Key.Down => GamepadButton.DPadDown,
-                Key.Enter or Key.Space => GamepadButton.A,
-                Key.Insert => GamepadButton.Y,
+                Key.Left => GamepadAction.NavigateLeft,
+                Key.Right => GamepadAction.NavigateRight,
+                Key.Up => GamepadAction.NavigateUp,
+                Key.Down => GamepadAction.NavigateDown,
+                Key.Enter or Key.Space => GamepadAction.Confirm,
+                Key.Insert => GamepadAction.Secondary,
+                Key.Apps => GamepadAction.Menu, // the Windows "context menu" key — keyboard equivalent of gamepad Menu/Start/Options
                 _ => null,
             };
-            if (!button.HasValue) return;
-            HandleGamepadButton(button.Value);
+            if (!action.HasValue) return;
+            HandleGamepadAction(action.Value);
             e.Handled = true; // prevent native ListBox arrow-key handling from also acting on this keypress
         };
     }
 
-    /// <summary>Called both by local keyboard handling above and by App forwarding real gamepad button presses (App owns the GamepadWatcher).</summary>
-    public void HandleGamepadButton(GamepadButton button)
+    /// <summary>Called both by local keyboard handling above and by App forwarding real gamepad actions (App owns the GamepadWatcher).</summary>
+    public void HandleGamepadAction(GamepadAction action)
     {
         var vm = (MainViewModel)DataContext;
-        if (vm.Games.Count > 0)
+        var visibleGames = vm.GamesView.Cast<GameTileViewModel>().ToList(); // nav moves through whatever the search filter is currently showing, not the full library
+        if (visibleGames.Count > 0)
         {
             int columns = Math.Max(1, (int)(GameGrid.ActualWidth / TileFootprintWidth));
-            int index = vm.SelectedGame is null ? 0 : vm.Games.IndexOf(vm.SelectedGame);
+            int index = vm.SelectedGame is null ? 0 : visibleGames.IndexOf(vm.SelectedGame);
+            if (index < 0) index = 0; // selected game got filtered out from under us
 
             int previousIndex = index;
-            index = button switch
+            index = action switch
             {
-                GamepadButton.DPadLeft => Math.Max(0, index - 1),
-                GamepadButton.DPadRight => Math.Min(vm.Games.Count - 1, index + 1),
-                GamepadButton.DPadUp => Math.Max(0, index - columns),
-                GamepadButton.DPadDown => Math.Min(vm.Games.Count - 1, index + columns),
+                GamepadAction.NavigateLeft => Math.Max(0, index - 1),
+                GamepadAction.NavigateRight => Math.Min(visibleGames.Count - 1, index + 1),
+                GamepadAction.NavigateUp => Math.Max(0, index - columns),
+                GamepadAction.NavigateDown => Math.Min(visibleGames.Count - 1, index + columns),
                 _ => index,
             };
 
             if (index != previousIndex) SoundService.PlayNavigate();
 
-            vm.SelectedGame = vm.Games[index];
+            vm.SelectedGame = visibleGames[index];
             GameGrid.ScrollIntoView(vm.SelectedGame);
         }
 
-        if (button == GamepadButton.A) LaunchSelected(vm, vm.SelectedGame);
-        if (button == GamepadButton.Y && vm.AddGameCommand.CanExecute(null)) vm.AddGameCommand.Execute(null);
+        if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);
+        if (action == GamepadAction.Secondary && vm.AddGameCommand.CanExecute(null)) vm.AddGameCommand.Execute(null);
+        if (action == GamepadAction.Menu) OpenGameContextMenu(vm);
     }
+
+    /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Start/Options
+    /// equivalent of right-clicking a tile. Only reachable when no game is running (App intercepts Menu for the
+    /// in-game overlay toggle in that case instead — see App.OnGamepadAction).</summary>
+    private void OpenGameContextMenu(MainViewModel vm)
+    {
+        if (vm.SelectedGame is null) return;
+        if (GameGrid.ItemContainerGenerator.ContainerFromItem(vm.SelectedGame) is not ListBoxItem { ContextMenu: { } menu } container) return;
+
+        menu.PlacementTarget = container;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>Right-click doesn't move ListBox selection on its own — select the tile under the cursor first so the
+    /// context menu it's about to open (Change Wallpaper / Delete Game) always acts on the game actually clicked.</summary>
+    private void GameTile_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is GameTileViewModel tile)
+            ((MainViewModel)DataContext).SelectedGame = tile;
+    }
+
+    private void ChangeWallpaper_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.ChangeArtworkCommand.CanExecute(null)) vm.ChangeArtworkCommand.Execute(null);
+    }
+
+    /// <summary>Enables/disables "Revert to Previous Artwork" for whatever game the menu is about to show for — covers
+    /// both trigger paths (right-click sets PlacementTarget natively, OpenGameContextMenu sets it explicitly).</summary>
+    private void GameTileContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var menu = (ContextMenu)sender;
+        var tile = (menu.PlacementTarget as FrameworkElement)?.DataContext as GameTileViewModel;
+        // Tag-based lookup, not FindName: a MenuItem declared inside a Window.Resources object graph (as
+        // opposed to a ControlTemplate) isn't registered in any NameScope FindName can resolve at runtime —
+        // that's why this was silently a no-op before. menu.Items enumeration works regardless of naming.
+        var revertItem = menu.Items.OfType<MenuItem>().FirstOrDefault(mi => Equals(mi.Tag, "RevertArtwork"));
+        if (revertItem is not null) revertItem.IsEnabled = tile?.HasPreviousArtwork ?? false;
+    }
+
+    private void RevertArtwork_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.RevertArtworkCommand.CanExecute(null)) vm.RevertArtworkCommand.Execute(null);
+    }
+
+    private void DeleteGame_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.RemoveGameCommand.CanExecute(null)) vm.RemoveGameCommand.Execute(null);
+    }
+
+    /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>
+    public void UpdateControllerBattery(int? percent) => ((MainViewModel)DataContext).ControllerBatteryPercent = percent;
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 

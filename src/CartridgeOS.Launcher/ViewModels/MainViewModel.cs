@@ -1,9 +1,14 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CartridgeOS.Core;
 using CartridgeOS.Core.Data;
@@ -24,9 +29,14 @@ public sealed class MainViewModel : ViewModelBase
     private readonly GameDatabase _db;
     private readonly AppSettings _settings = SettingsStore.Load();
     private readonly DispatcherTimer _rescanTimer;
+    private readonly DispatcherTimer _statusTimer;
+    private readonly Dispatcher _dispatcher;
 
     public ObservableCollection<GameTileViewModel> Games { get; } = [];
     public ObservableCollection<GameTileViewModel> RecentGames { get; } = [];
+
+    /// <summary>Filtered view of <see cref="Games"/> driven by <see cref="SearchText"/> — what the grid actually binds to.</summary>
+    public ICollectionView GamesView { get; }
 
     private bool _hasRecentGames;
     public bool HasRecentGames
@@ -47,6 +57,88 @@ public sealed class MainViewModel : ViewModelBase
     {
         get => _isSettingsOpen;
         set => SetProperty(ref _isSettingsOpen, value);
+    }
+
+    private string _searchText = "";
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (!SetProperty(ref _searchText, value)) return;
+            GamesView.Refresh();
+        }
+    }
+
+    private bool _isSearchOpen;
+    public bool IsSearchOpen
+    {
+        get => _isSearchOpen;
+        set
+        {
+            if (!SetProperty(ref _isSearchOpen, value)) return;
+            if (!value) SearchText = ""; // closing the search box clears the filter rather than leaving the grid stuck filtered
+        }
+    }
+
+    private int? _controllerBatteryPercent;
+    /// <summary>Set by App forwarding GamepadWatcher's ControllerBatteryChanged — null when no controller reports one.</summary>
+    public int? ControllerBatteryPercent
+    {
+        get => _controllerBatteryPercent;
+        set
+        {
+            if (!SetProperty(ref _controllerBatteryPercent, value)) return;
+            RefreshBatteryDisplay();
+        }
+    }
+
+    private string _batteryGlyph = "🎮";
+    public string BatteryGlyph
+    {
+        get => _batteryGlyph;
+        private set => SetProperty(ref _batteryGlyph, value);
+    }
+
+    private string? _batteryLabel;
+    /// <summary>Null when there's nothing to show — no controller battery reported and this machine has no battery of its own (desktop).</summary>
+    public string? BatteryLabel
+    {
+        get => _batteryLabel;
+        private set
+        {
+            if (!SetProperty(ref _batteryLabel, value)) return;
+            OnPropertyChanged(nameof(HasBatteryInfo));
+        }
+    }
+
+    public bool HasBatteryInfo => BatteryLabel is not null;
+
+    private bool _isOnline = true;
+    public bool IsOnline
+    {
+        get => _isOnline;
+        private set
+        {
+            if (!SetProperty(ref _isOnline, value)) return;
+            OnPropertyChanged(nameof(ConnectivityLabel));
+        }
+    }
+
+    public string ConnectivityLabel => IsOnline ? "ONLINE" : "OFFLINE";
+
+    private string _currentTimeText = "";
+    public string CurrentTimeText
+    {
+        get => _currentTimeText;
+        private set => SetProperty(ref _currentTimeText, value);
+    }
+
+    private string _currentDateText = "";
+    public string CurrentDateText
+    {
+        get => _currentDateText;
+        private set => SetProperty(ref _currentDateText, value);
     }
 
     public WallpaperMode WallpaperMode
@@ -74,13 +166,19 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     public ICommand AddGameCommand { get; }
+    public ICommand RemoveGameCommand { get; }
+    public ICommand ChangeArtworkCommand { get; }
+    public ICommand RevertArtworkCommand { get; }
     public ICommand ScanForGamesCommand { get; }
     public ICommand FindMoreGamesCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
     public ICommand ChooseWallpaperCommand { get; }
+    public ICommand ToggleSearchCommand { get; }
 
     public MainViewModel()
     {
+        _dispatcher = Dispatcher.CurrentDispatcher;
+
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CartridgeOS", "games.db");
@@ -88,10 +186,17 @@ public sealed class MainViewModel : ViewModelBase
 
         _db = new GameDatabase(dbPath);
         AddGameCommand = new RelayCommand(AddGame);
+        RemoveGameCommand = new RelayCommand(RemoveGame);
+        ChangeArtworkCommand = new RelayCommand(ChangeArtwork);
+        RevertArtworkCommand = new RelayCommand(RevertArtwork);
         ScanForGamesCommand = new RelayCommand(ScanForGames);
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
+        ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
+
+        GamesView = CollectionViewSource.GetDefaultView(Games);
+        GamesView.Filter = FilterGame;
 
         if (!string.IsNullOrEmpty(_settings.CustomWallpaperPath))
             _ = LoadCustomWallpaperAsync(_settings.CustomWallpaperPath);
@@ -113,9 +218,45 @@ public sealed class MainViewModel : ViewModelBase
         _rescanTimer = new DispatcherTimer { Interval = RescanInterval };
         _rescanTimer.Tick += async (_, _) => await RescanInBackgroundAsync();
         _rescanTimer.Start();
+
+        IsOnline = NetworkInterface.GetIsNetworkAvailable();
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+
+        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _statusTimer.Tick += (_, _) => UpdateClock();
+        _statusTimer.Start();
+        UpdateClock();
     }
 
     public void StopBackgroundRescanning() => _rescanTimer.Stop();
+
+    /// <summary>Stops the clock tick and unsubscribes the network-change listener — must run when the window closes, same reason as <see cref="StopBackgroundRescanning"/>.</summary>
+    public void StopStatusUpdates()
+    {
+        _statusTimer.Stop();
+        NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+    }
+
+    private bool FilterGame(object obj) =>
+        string.IsNullOrWhiteSpace(SearchText) || ((GameTileViewModel)obj).Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+
+    private void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e) =>
+        _dispatcher.BeginInvoke(() => IsOnline = e.IsAvailable);
+
+    private void UpdateClock()
+    {
+        var now = DateTime.Now;
+        CurrentTimeText = $"{now:hh:mm} {(now.Hour < 12 ? "am" : "pm")}";
+        CurrentDateText = now.ToString("ddd, d MMM", CultureInfo.InvariantCulture).ToUpperInvariant();
+        RefreshBatteryDisplay(); // piggyback on the 1s tick to keep the device-battery fallback fresh too
+    }
+
+    private void RefreshBatteryDisplay()
+    {
+        int? percent = ControllerBatteryPercent ?? DeviceBattery.GetPercent();
+        BatteryGlyph = ControllerBatteryPercent.HasValue ? "🎮" : "💻";
+        BatteryLabel = percent.HasValue ? $"{percent}%" : null;
+    }
 
     public void RecordPlayed(GameTileViewModel game)
     {
@@ -162,6 +303,69 @@ public sealed class MainViewModel : ViewModelBase
         var tile = new GameTileViewModel(game);
         Games.Add(tile);
         SelectedGame = tile;
+    }
+
+    private void RemoveGame()
+    {
+        var game = SelectedGame;
+        if (game is null) return;
+
+        var confirmed = MessageBox.Show($"Remove \"{game.Title}\" from Cartridge OS?\n\nThis only removes it from the library — the game itself isn't touched.",
+            "Remove Game", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirmed != MessageBoxResult.Yes) return;
+
+        _db.DeleteGame(game.Id);
+        Games.Remove(game);
+        SelectedGame = Games.FirstOrDefault();
+        RebuildRecentGames();
+    }
+
+    // Tile artwork slot is ~2:3 portrait (matches ArtworkCropWindow's crop viewport, and the box-art
+    // convention already used elsewhere in this app — Steam's library_600x900.jpg, SteamGridDB/TheGamesDB
+    // boxart). Skip the crop step when the picked image is already close enough that WPF's automatic
+    // center-fill crop (Stretch="UniformToFill" on the tile Image) won't cut off anything important.
+    private const double TileAspect = 2.0 / 3.0;
+    private const double AspectTolerance = 0.05;
+
+    /// <summary>Replaces the selected game's own artwork (tile image + selected-game background) with a user-picked local file — distinct from ChooseWallpaperAsync's app-wide custom-background setting below.</summary>
+    private void ChangeArtwork()
+    {
+        var game = SelectedGame;
+        if (game is null) return;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = $"Choose artwork for {game.Title}",
+            Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        string artworkPath = dialog.FileName;
+        if (!MatchesTileAspect(artworkPath))
+        {
+            var cropWindow = new ArtworkCropWindow(artworkPath) { Owner = Application.Current.MainWindow };
+            if (cropWindow.ShowDialog() != true || cropWindow.ResultPath is null) return;
+            artworkPath = cropWindow.ResultPath;
+        }
+
+        _db.UpdateArtworkPath(game.Id, artworkPath);
+        game.SetArtworkPath(artworkPath);
+    }
+
+    private static bool MatchesTileAspect(string imagePath)
+    {
+        var frame = BitmapFrame.Create(new Uri(imagePath), BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        double aspect = (double)frame.PixelWidth / frame.PixelHeight;
+        return Math.Abs(aspect - TileAspect) <= AspectTolerance;
+    }
+
+    /// <summary>Undoes the selected game's most recent artwork change. No-ops if there isn't one (nothing selected, or no prior change this session — reverting isn't persisted across app restarts).</summary>
+    private void RevertArtwork()
+    {
+        var game = SelectedGame;
+        if (game is null || !game.TryRevertArtwork(out var restored)) return;
+
+        _db.UpdateArtworkPath(game.Id, restored);
     }
 
     private async Task ChooseWallpaperAsync()
@@ -234,7 +438,7 @@ public sealed class MainViewModel : ViewModelBase
 
         foreach (var game in scannedGames)
         {
-            if (existingExePaths.Contains(game.ExecutablePath)) continue;
+            if (!existingExePaths.Add(game.ExecutablePath)) continue; // false = already present, including duplicates within this same scan batch
 
             game.Id = _db.AddGame(game);
             var tile = new GameTileViewModel(game);

@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Text;
 using System.Text.Json;
 
 namespace CartridgeOS.Launcher.Services;
@@ -16,6 +17,10 @@ public sealed class DiscordRichPresence : IDisposable
     // Discord Application ID for "Cartridge OS" (developer.discord.com) — not a secret, every install shares it.
     private const string ClientId = "1535179486117502976";
 
+    private static readonly string LogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "CartridgeOS", "discord.log");
+
     private NamedPipeClientStream? _pipe;
     private bool _ready;
 
@@ -28,38 +33,61 @@ public sealed class DiscordRichPresence : IDisposable
                 var pipe = new NamedPipeClientStream(".", $"discord-ipc-{i}", PipeDirection.InOut, PipeOptions.Asynchronous);
                 await pipe.ConnectAsync(300).ConfigureAwait(false);
                 _pipe = pipe;
+                Log($"connected to discord-ipc-{i}");
             }
             catch (Exception ex) when (ex is IOException or TimeoutException)
             {
                 // that pipe number isn't Discord — try the next one
             }
         }
-        if (_pipe is null) return; // Discord isn't running — no-op for the rest of this session
+        if (_pipe is null)
+        {
+            Log("no discord-ipc-N pipe found (checked 0..9) — Discord isn't running, or its IPC pipe wasn't reachable");
+            return;
+        }
 
         try
         {
             await SendAsync(0, new { v = 1, client_id = ClientId }).ConfigureAwait(false);
-            await ReadFrameAsync().ConfigureAwait(false); // READY event, contents unused — just drain it
+            string response = await ReadFrameAsync().ConfigureAwait(false);
+            Log($"handshake response: {response}");
+
+            // Discord replies even to a bad client_id — it just sends evt:"ERROR" instead of failing the
+            // pipe connect, so the old code (which never looked at the response) treated that as success.
+            using var doc = JsonDocument.Parse(response);
+            if (doc.RootElement.TryGetProperty("evt", out var evtProp) && evtProp.GetString() == "ERROR")
+            {
+                string message = doc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("message", out var msg)
+                    ? msg.GetString() ?? "(no message)" : "(no message)";
+                Log($"handshake rejected by Discord — {message}. Check that ClientId '{ClientId}' is still a valid registered application.");
+                return; // _ready stays false — every SetActivityAsync call from here on is a safe no-op
+            }
+
             _ready = true;
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            Log($"handshake failed — {ex.Message}");
             _pipe = null;
         }
     }
 
-    public Task SetActivityAsync(string gameTitle, DateTimeOffset startedAt) => SendActivityAsync(new
+    public Task SetActivityAsync(string gameTitle, DateTimeOffset startedAt) => SendActivityAsync(gameTitle, new
     {
         details = gameTitle,
         state = "Playing",
         timestamps = new { start = startedAt.ToUnixTimeSeconds() },
     });
 
-    public Task ClearActivityAsync() => SendActivityAsync(null);
+    public Task ClearActivityAsync() => SendActivityAsync(null, null);
 
-    private async Task SendActivityAsync(object? activity)
+    private async Task SendActivityAsync(string? gameTitle, object? activity)
     {
-        if (!_ready || _pipe is null) return;
+        if (!_ready || _pipe is null)
+        {
+            Log($"SET_ACTIVITY('{gameTitle}') skipped — not connected to Discord");
+            return;
+        }
         try
         {
             await SendAsync(1, new
@@ -68,9 +96,15 @@ public sealed class DiscordRichPresence : IDisposable
                 args = new { pid = Environment.ProcessId, activity },
                 nonce = Guid.NewGuid().ToString(),
             }).ConfigureAwait(false);
+
+            // Discord replies to every command with a response frame (echo on success, evt:"ERROR" on
+            // failure) — the old code never read it, so a rejected activity update was invisible.
+            string response = await ReadFrameAsync().ConfigureAwait(false);
+            Log($"SET_ACTIVITY('{gameTitle}') response: {response}");
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            Log($"SET_ACTIVITY('{gameTitle}') failed — {ex.Message}");
             _ready = false; // Discord closed the pipe (quit/restarted) — stop trying until next ConnectAsync
         }
     }
@@ -86,12 +120,25 @@ public sealed class DiscordRichPresence : IDisposable
         await _pipe!.FlushAsync().ConfigureAwait(false);
     }
 
-    private async Task ReadFrameAsync()
+    private async Task<string> ReadFrameAsync()
     {
         byte[] header = new byte[8];
         await _pipe!.ReadExactlyAsync(header).ConfigureAwait(false);
         int length = BitConverter.ToInt32(header, 4);
-        await _pipe!.ReadExactlyAsync(new byte[length]).ConfigureAwait(false);
+        byte[] body = new byte[length];
+        await _pipe!.ReadExactlyAsync(body).ConfigureAwait(false);
+        return Encoding.UTF8.GetString(body);
+    }
+
+    // ponytail: plain append-to-file log, no rotation — this file stays tiny (a few lines per app session).
+    private static void Log(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss} {message}{Environment.NewLine}");
+        }
+        catch (IOException) { }
     }
 
     public void Dispose() => _pipe?.Dispose();

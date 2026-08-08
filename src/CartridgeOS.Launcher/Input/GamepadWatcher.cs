@@ -15,12 +15,40 @@ public sealed class GamepadWatcher
     private static readonly GamepadButton[] DirectionButtons =
         [GamepadButton.DPadUp, GamepadButton.DPadDown, GamepadButton.DPadLeft, GamepadButton.DPadRight];
 
+    // Physical-button -> UI-action vocabulary. X and the view/select "Back" button aren't wired to
+    // anything in the launcher yet, so they're left unmapped (ponytail: add an entry when they get a use).
+    private static readonly Dictionary<GamepadButton, GamepadAction> ActionMap = new()
+    {
+        [GamepadButton.DPadUp] = GamepadAction.NavigateUp,
+        [GamepadButton.DPadDown] = GamepadAction.NavigateDown,
+        [GamepadButton.DPadLeft] = GamepadAction.NavigateLeft,
+        [GamepadButton.DPadRight] = GamepadAction.NavigateRight,
+        [GamepadButton.A] = GamepadAction.Confirm,
+        [GamepadButton.B] = GamepadAction.Back,
+        [GamepadButton.Y] = GamepadAction.Secondary,
+        [GamepadButton.Start] = GamepadAction.Menu,
+    };
+
+    private static readonly TimeSpan BatteryCheckInterval = TimeSpan.FromSeconds(10); // battery queries are a real syscall each time — not worth doing every 33ms poll
+
     private readonly Dictionary<GamepadButton, DateTime> _nextRepeatAt = new();
     private ushort _previousButtons;
     private bool _rightTriggerHeld;
+    private DateTime _nextBatteryCheckAt = DateTime.MinValue;
     private CancellationTokenSource? _cts;
 
-    public event Action<GamepadButton>? ButtonPressed;
+    public ControllerKind? CurrentController { get; private set; }
+
+    public int? ControllerBatteryPercent { get; private set; }
+
+    /// <summary>UI-level action, edge-triggered with directional repeat while a stick/dpad is held.</summary>
+    public event Action<GamepadAction>? ActionPressed;
+
+    /// <summary>Fired whenever the connected controller's brand changes, including to/from null on connect/disconnect.</summary>
+    public event Action<ControllerKind?>? ControllerChanged;
+
+    /// <summary>Fired whenever the connected controller's battery reading changes (including to/from null).</summary>
+    public event Action<int?>? ControllerBatteryChanged;
 
     /// <summary>Fired with normalized (-1..1) deadzone-filtered values whenever the right stick is off-center.</summary>
     public event Action<float, float>? RightStickMoved;
@@ -45,12 +73,23 @@ public sealed class GamepadWatcher
     {
         while (!token.IsCancellationRequested)
         {
+            var now = DateTime.UtcNow;
             if (XInput.XInputGetState(0, out var state) == 0) // 0 = ERROR_SUCCESS, controller connected
             {
-                Poll(state.Gamepad, DateTime.UtcNow);
+                SetController(ControllerKind.Xbox);
+                RefreshBatteryIfDue(now, () => XInput.GetBatteryPercent(0));
+                Poll(state.Gamepad, now);
+            }
+            else if (RawGameControllerSource.TryGetState(out var rawGamepad, out var kind)) // XInput doesn't see PlayStation pads; fall back to DirectInput-backed RawGameController
+            {
+                SetController(kind);
+                RefreshBatteryIfDue(now, RawGameControllerSource.GetBatteryPercent);
+                Poll(rawGamepad, now);
             }
             else
             {
+                SetController(null);
+                SetBattery(null);
                 _previousButtons = 0;
                 _nextRepeatAt.Clear();
                 if (_rightTriggerHeld) { _rightTriggerHeld = false; RightTriggerChanged?.Invoke(false); } // don't leave the mouse button stuck down on disconnect
@@ -58,6 +97,27 @@ public sealed class GamepadWatcher
 
             try { await Task.Delay(PollInterval, token); } catch (TaskCanceledException) { }
         }
+    }
+
+    private void SetController(ControllerKind? kind)
+    {
+        if (kind == CurrentController) return;
+        CurrentController = kind;
+        ControllerChanged?.Invoke(kind);
+    }
+
+    private void SetBattery(int? percent)
+    {
+        if (percent == ControllerBatteryPercent) return;
+        ControllerBatteryPercent = percent;
+        ControllerBatteryChanged?.Invoke(percent);
+    }
+
+    private void RefreshBatteryIfDue(DateTime now, Func<int?> read)
+    {
+        if (now < _nextBatteryCheckAt) return;
+        _nextBatteryCheckAt = now + BatteryCheckInterval;
+        SetBattery(read());
     }
 
     private void Poll(XInputGamepad gamepad, DateTime now)
@@ -71,12 +131,12 @@ public sealed class GamepadWatcher
 
             if (held && !wasHeld)
             {
-                ButtonPressed?.Invoke(direction);
+                ActionPressed?.Invoke(ActionMap[direction]);
                 _nextRepeatAt[direction] = now + InitialRepeatDelay;
             }
             else if (held && wasHeld && now >= _nextRepeatAt.GetValueOrDefault(direction))
             {
-                ButtonPressed?.Invoke(direction);
+                ActionPressed?.Invoke(ActionMap[direction]);
                 _nextRepeatAt[direction] = now + RepeatInterval;
             }
             else if (!held)
@@ -85,10 +145,11 @@ public sealed class GamepadWatcher
             }
         }
 
-        foreach (var button in new[] { GamepadButton.A, GamepadButton.B, GamepadButton.X, GamepadButton.Y, GamepadButton.Start, GamepadButton.Back })
+        foreach (var (button, action) in ActionMap)
         {
+            if (DirectionButtons.Contains(button)) continue; // handled above, with repeat
             bool pressed = ((GamepadButton)buttons & button) != 0 && ((GamepadButton)_previousButtons & button) == 0;
-            if (pressed) ButtonPressed?.Invoke(button);
+            if (pressed) ActionPressed?.Invoke(action);
         }
 
         _previousButtons = buttons;

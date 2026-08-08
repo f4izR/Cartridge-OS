@@ -16,8 +16,78 @@
         Background="{StaticResource BackgroundBrush}">
 
     <Window.Resources>
+        <!-- Declared first — GameTileStyle/RecentTileStyle's ControlTemplates reference BoolToVisibility via
+             StaticResource, which (unlike DynamicResource) requires the resource to already be defined earlier
+             in this same dictionary. -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+        <conv:EnumToBooleanConverter x:Key="EnumToBoolean" />
+
+        <!-- Implicit (no x:Key) so every ContextMenu/MenuItem in the app picks this up automatically —
+             the native Win32-chrome default (gray, icon/check gutter, square corners) reads completely
+             off-theme next to the rest of this app's flat dark cyan-accented look. -->
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="8">
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" Opacity="0.4" BlurRadius="18" ShadowDepth="6" Direction="270" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="5" Margin="0,1" Padding="12,8">
+                            <ContentPresenter x:Name="HeaderContent" ContentSource="Header" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="HeaderContent" Property="TextElement.Foreground" Value="{StaticResource TextMutedBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="Transparent" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Per-game menu (right-click, or gamepad Menu/Start/Options) — Click handlers in code-behind
+             read MainWindow's own DataContext directly, sidestepping ContextMenu's usual data-context/
+             visual-tree quirks entirely rather than fighting them with RelativeSource bindings. -->
+        <ContextMenu x:Key="GameTileContextMenu" Opened="GameTileContextMenu_Opened">
+            <MenuItem Header="Change Wallpaper" Click="ChangeWallpaper_Click" />
+            <MenuItem Tag="RevertArtwork" Header="Revert to Previous Artwork" Click="RevertArtwork_Click" />
+            <MenuItem Header="Delete Game" Click="DeleteGame_Click" />
+        </ContextMenu>
+
         <Style x:Key="GameTileStyle" TargetType="ListBoxItem">
             <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="ContextMenu" Value="{StaticResource GameTileContextMenu}" />
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="GameTile_PreviewMouseRightButtonDown" />
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="RenderTransform">
                 <Setter.Value>
@@ -55,6 +125,16 @@
                                            Foreground="{StaticResource TextPrimaryBrush}" FontSize="15" FontWeight="SemiBold"
                                            Margin="12,0,12,14" TextWrapping="Wrap"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
+
+                                <!-- Covers the whole tile the moment a launch is requested — the visible answer to
+                                     "did my click register", since a shell launch (Steam/Xbox) can take a few
+                                     seconds with zero other feedback otherwise. -->
+                                <Border Grid.RowSpan="2" CornerRadius="10" Background="#B0000000"
+                                        Visibility="{Binding IsLaunching, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -108,6 +188,8 @@
 
         <Style x:Key="RecentTileStyle" TargetType="ListBoxItem">
             <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="ContextMenu" Value="{StaticResource GameTileContextMenu}" />
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="GameTile_PreviewMouseRightButtonDown" />
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="RenderTransform">
                 <Setter.Value>
@@ -145,6 +227,13 @@
                                            Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" FontWeight="SemiBold"
                                            Margin="8,0,8,10" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
+
+                                <Border Grid.RowSpan="2" CornerRadius="8" Background="#B0000000"
+                                        Visibility="{Binding IsLaunching, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="10" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -195,10 +284,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
-        <conv:EnumToBooleanConverter x:Key="EnumToBoolean" />
 
         <Style x:Key="SettingsRadioStyle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
@@ -293,6 +378,16 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Rounded status-bar pill (battery / connectivity / search / clock), matching the reference design. -->
+        <Style x:Key="StatusPillStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -348,11 +443,64 @@
                     <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
                             Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
                     <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
+                    <Button Content="Remove Game" Command="{Binding RemoveGameCommand}"
                             Style="{StaticResource PrimaryButtonStyle}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                    <!-- Battery: whichever device actually has one to report — a connected controller if it reports a level, otherwise this machine's own. -->
+                    <Border Style="{StaticResource StatusPillStyle}"
+                            Visibility="{Binding HasBatteryInfo, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding BatteryGlyph}" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding BatteryLabel}" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource StatusPillStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE701;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding ConnectivityLabel}" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource StatusPillStyle}" Padding="6">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="&#xE721;" FontFamily="Segoe MDL2 Assets" Width="28" Height="28"
+                                    Command="{Binding ToggleSearchCommand}"
+                                    Style="{StaticResource WindowControlButtonBase}" ToolTip="Search" />
+                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="140" Margin="4,0,4,0" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                     Background="Transparent" BorderThickness="0"
+                                     Foreground="{StaticResource TextPrimaryBrush}" CaretBrush="{StaticResource TextPrimaryBrush}"
+                                     Visibility="{Binding IsSearchOpen, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource StatusPillStyle}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding CurrentTimeText}" Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding CurrentDateText}" Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <Button Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Command="{Binding ToggleSettingsCommand}"
-                            Style="{StaticResource MinimizeButtonStyle}" ToolTip="Settings" />
+                            Style="{StaticResource MinimizeButtonStyle}" ToolTip="Settings" Margin="8,0,0,0" />
                     <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click"
                             Style="{StaticResource MinimizeButtonStyle}" ToolTip="Minimize" />
                     <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Close_Click"
@@ -380,7 +528,7 @@
             </StackPanel>
 
             <ListBox x:Name="GameGrid" Grid.Row="2"
-                     ItemsSource="{Binding Games}"
+                     ItemsSource="{Binding GamesView}"
                      SelectedItem="{Binding SelectedGame}"
                      Background="Transparent" BorderThickness="0"
                      ScrollViewer.CanContentScroll="True"

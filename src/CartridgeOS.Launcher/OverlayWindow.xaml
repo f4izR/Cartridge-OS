@@ -23,8 +23,10 @@
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
                     BorderThickness="0" Padding="10,8" HorizontalAlignment="Stretch" />
 
-            <TextBlock Text="Ctrl+Shift+O or controller Start to toggle this overlay" Foreground="{StaticResource TextMutedBrush}"
-                       FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center" />
+            <TextBlock Foreground="{StaticResource TextMutedBrush}"
+                       FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center">
+                <Run Text="Ctrl+Shift+O or controller " /><Run Text="{Binding MenuButtonLabel}" /><Run Text=" to toggle this overlay" />
+            </TextBlock>
         </StackPanel>
     </Border>
 </Window>

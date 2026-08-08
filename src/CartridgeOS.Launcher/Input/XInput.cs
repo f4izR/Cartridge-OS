@@ -36,12 +36,42 @@ internal struct XInputState
     public XInputGamepad Gamepad;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct XInputBatteryInformation
+{
+    public byte BatteryType;
+    public byte BatteryLevel;
+}
+
 internal static class XInput
 {
     // Deadzone values recommended by Microsoft for each thumbstick.
     public const short LeftThumbDeadzone = 7849;
     public const short RightThumbDeadzone = 8689;
 
+    private const byte BatteryDevTypeGamepad = 0;
+    private const byte BatteryTypeDisconnected = 0x00;
+
     [DllImport("xinput1_4.dll")]
     public static extern int XInputGetState(int dwUserIndex, out XInputState pState);
+
+    [DllImport("xinput1_4.dll")]
+    private static extern int XInputGetBatteryInformation(int dwUserIndex, byte devType, out XInputBatteryInformation pBatteryInformation);
+
+    // ponytail: XInput only reports 4 coarse levels (Empty/Low/Medium/Full), not an exact percentage —
+    // bucketed to roughly match what each level represents, not a real reading.
+    public static int? GetBatteryPercent(int dwUserIndex)
+    {
+        if (XInputGetBatteryInformation(dwUserIndex, BatteryDevTypeGamepad, out var info) != 0) return null;
+        if (info.BatteryType == BatteryTypeDisconnected) return null;
+
+        return info.BatteryLevel switch
+        {
+            0 => 10,  // Empty
+            1 => 35,  // Low
+            2 => 65,  // Medium
+            3 => 100, // Full
+            _ => null,
+        };
+    }
 }

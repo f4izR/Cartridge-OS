@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -42,6 +43,9 @@ public partial class App : Application
     private TaskbarIcon? _trayIcon;
     private Window? _coreWindow;
     private GamepadWatcher? _gamepad;
+    private MouseEmulator? _mouse;
+    private ControllerKind? _currentController;
+    private IGamepadInputTarget? _modalGamepadTarget;
     private GlobalHotkey? _overlayHotkey;
     private DiscordRichPresence? _discord;
 
@@ -88,10 +92,12 @@ public partial class App : Application
         new WindowInteropHelper(_coreWindow).EnsureHandle();
 
         _gamepad = new GamepadWatcher();
-        var mouse = new MouseEmulator();
-        _gamepad.ButtonPressed += OnGamepadButton;
-        _gamepad.RightStickMoved += mouse.Move;
-        _gamepad.RightTriggerChanged += mouse.SetLeftButtonDown;
+        _mouse = new MouseEmulator();
+        _gamepad.ActionPressed += OnGamepadAction;
+        _gamepad.ControllerChanged += OnControllerChanged;
+        _gamepad.ControllerBatteryChanged += OnControllerBatteryChanged;
+        _gamepad.RightStickMoved += OnRightStickMoved;
+        _gamepad.RightTriggerChanged += OnRightTriggerChanged;
         _gamepad.Start();
 
         _overlayHotkey = new GlobalHotkey(_coreWindow);
@@ -115,14 +121,50 @@ public partial class App : Application
         return new PipeResponse(true);
     }
 
-    private void OnGamepadButton(GamepadButton button)
+    private void OnGamepadAction(GamepadAction action)
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (button == GamepadButton.Start) ToggleOverlay(); // Xbox "Menu"/PS "Options" — works with no launcher window open, unlike the old per-window binding
-            else _launcherWindow?.HandleGamepadButton(button);
+            // A modal dialog (e.g. ArtworkCropWindow) takes over entirely while it's open — its input must
+            // never also reach the launcher window underneath (double-handling a Confirm/Back press).
+            if (_modalGamepadTarget is { } target) { target.HandleAction(action); return; }
+
+            // Menu means two different things depending on context: toggle the in-game overlay while a game is
+            // running (works with no launcher window open, unlike the old per-window binding), or — when nothing's
+            // running — open the selected tile's context menu (Change Wallpaper / Delete Game) in the launcher.
+            if (action == GamepadAction.Menu && _runningGameProcess is not null) ToggleOverlay();
+            else _launcherWindow?.HandleGamepadAction(action);
         });
     }
+
+    /// <summary>Called by a modal window (e.g. ArtworkCropWindow) on open/close to take over — or release — exclusive gamepad routing.</summary>
+    public void SetModalGamepadTarget(IGamepadInputTarget? target) => _modalGamepadTarget = target;
+
+    private void OnRightStickMoved(float x, float y)
+    {
+        if (_modalGamepadTarget is { } target) Dispatcher.BeginInvoke(() => target.HandleRightStick(x, y));
+        else _mouse!.Move(x, y); // pure Win32 P/Invoke, not a WPF object — safe to call straight from the poll thread, no Dispatcher needed
+    }
+
+    private void OnRightTriggerChanged(bool held)
+    {
+        if (_modalGamepadTarget is not null) return; // avoid a stray emulated click landing on the dialog underneath while it's open
+        _mouse!.SetLeftButtonDown(held);
+    }
+
+    /// <summary>Keeps the overlay's on-screen button prompt matching whatever controller is actually plugged in.</summary>
+    private void OnControllerChanged(ControllerKind? kind)
+    {
+        // Fired from GamepadWatcher's background poll thread — every touch of a bound viewmodel property must
+        // marshal to the UI thread, same reason OnGamepadAction does.
+        Dispatcher.BeginInvoke(() =>
+        {
+            _currentController = kind;
+            if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Generic, GamepadAction.Menu);
+        });
+    }
+
+    private void OnControllerBatteryChanged(int? percent) => Dispatcher.BeginInvoke(() => _launcherWindow?.UpdateControllerBattery(percent));
 
     private void OpenLauncher_Click(object sender, RoutedEventArgs e) => ShowLauncher();
 
@@ -134,6 +176,7 @@ public partial class App : Application
         if (_launcherWindow is null)
         {
             _launcherWindow = new MainWindow(_lastSelectedGameId);
+            _launcherWindow.UpdateControllerBattery(_gamepad?.ControllerBatteryPercent);
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
         }
@@ -172,7 +215,7 @@ public partial class App : Application
             return;
         }
 
-        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame);
+        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame, _currentController);
         _overlayWindow = new OverlayWindow(overlayVm);
         _overlayWindow.Closed += (_, _) => _overlayWindow = null;
         _overlayWindow.Show();
@@ -207,29 +250,54 @@ public partial class App : Application
     /// The actual "launch a game" entry point, called by the launcher window — but the resulting
     /// process tracking/overlay/Discord presence all live here so they survive the window closing.
     /// </summary>
+    // Steam/Xbox shell launches (Process.Start returns null for those) give no signal of when the real
+    // game actually appears, so "Launching..." can't be cleared precisely — auto-clear after this long
+    // instead of leaving it stuck forever if the user tabs back without the window having minimized.
+    private static readonly TimeSpan ShellLaunchIndicatorTimeout = TimeSpan.FromSeconds(6);
+
     public void LaunchGame(MainViewModel vm, GameTileViewModel game)
     {
         // ponytail: no launch-failure UI yet (missing exe, permissions) — add when game launching is its own task.
         if (string.IsNullOrEmpty(game.ExecutablePath)) return;
+        if (game.IsLaunching) return; // already launching this one — the whole point of this indicator is to stop repeat clicks here
+
+        game.IsLaunching = true;
         SoundService.PlayConfirm();
 
-        var process = Process.Start(new ProcessStartInfo(game.ExecutablePath) { UseShellExecute = true });
+        // WorkingDirectory must be the game's own folder, not the launcher's — otherwise games that
+        // resolve assets via a relative path (e.g. ".\data\") fail to find them.
+        var startInfo = new ProcessStartInfo(game.ExecutablePath)
+        {
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath) ?? "",
+        };
+        var process = Process.Start(startInfo);
         vm.RecordPlayed(game);
 
         // Doesn't need the Process handle, so this runs even for Steam/Xbox shell launches (where
         // Process.Start returns null below) — only downside there is we can't auto-clear it on exit.
         _ = _discord?.SetActivityAsync(game.Title, DateTimeOffset.UtcNow);
 
+        // Minimize rather than destroy on launch — cheaper, no recreate-flicker for the common case.
+        // The launcher can still be fully closed (X button) while a game runs; that's handled by
+        // OnLauncherClosed same as any other close, independent of this. Unconditional (not just for a
+        // trackable Process) — Steam/Xbox launches go through steam://, shell:appsFolder\..., and the
+        // launcher should still get out of the way for those exactly the same as a direct exe launch.
+        if (_launcherWindow is not null) _launcherWindow.WindowState = WindowState.Minimized;
+
         // Steam/Xbox launches go through steam://, shell:appsFolder\... — the shell handles those
         // itself and Process.Start returns null, so there's no process to track or overlay for.
-        if (process is null) return;
+        if (process is null)
+        {
+            _ = ClearLaunchingAfterDelayAsync(game);
+            return;
+        }
+
+        // A real Process means the OS has genuinely launched it — no need to guess, clear immediately.
+        game.IsLaunching = false;
 
         _runningGameProcess = process;
         _runningGameTitle = game.Title;
-        // Minimize rather than destroy on launch — cheaper, no recreate-flicker for the common case.
-        // The launcher can still be fully closed (X button) while a game runs; that's handled by
-        // OnLauncherClosed same as any other close, independent of this.
-        if (_launcherWindow is not null) _launcherWindow.WindowState = WindowState.Minimized;
 
         try
         {
@@ -240,6 +308,12 @@ public partial class App : Application
         {
             // already exited before we could attach — nothing left to track
         }
+    }
+
+    private static async Task ClearLaunchingAfterDelayAsync(GameTileViewModel game)
+    {
+        await Task.Delay(ShellLaunchIndicatorTimeout);
+        game.IsLaunching = false;
     }
 
     private void OnGameExited()

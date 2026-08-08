@@ -59,12 +59,21 @@ public sealed class GameDatabase
         command.ExecuteNonQuery();
     }
 
-    public void UpdateArtworkPath(int id, string artworkPath)
+    public void UpdateArtworkPath(int id, string? artworkPath)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = "UPDATE Games SET ArtworkPath = $artwork WHERE Id = $id;";
-        command.Parameters.AddWithValue("$artwork", artworkPath);
+        command.Parameters.AddWithValue("$artwork", (object?)artworkPath ?? DBNull.Value);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
+    public void DeleteGame(int id)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Games WHERE Id = $id;";
         command.Parameters.AddWithValue("$id", id);
         command.ExecuteNonQuery();
     }
