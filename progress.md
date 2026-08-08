@@ -77,6 +77,12 @@ Fullscreen launcher with controller nav, keyboard/mouse fallback, manual add-gam
 - [ ] TheGamesDB title matching (`ArtworkFetcher.FindTheGamesDbUrlAsync`) takes the first search result with no disambiguation — can resolve to the wrong regional/platform/remaster variant for titles with multiple DB entries
 - [ ] True two-image crossfade for the selected-game background art (`MainWindow.xaml`'s `BackgroundArt`) — currently a single-image fade-in on selection change, not old-fades-out-while-new-fades-in; revisit if it reads as a hard cut in practice
 - [x] ~~Online box-art fetching~~ — done 2026-08-07, see log. Note: this does make one outbound call per game with no local art, which is a partial exception to the README's "Fully offline" pitch — worth flagging if that language needs updating.
+- [ ] Cannot find the .\data\ directory!
+The game is running from: 'C:\Users\phaiz\source\repos\f4izR\Cartridge-OS\src\CartridgeOS.Launcher\bin\Release\net10.0-windows'
+- [ ] Wallpaper engine detected twice " either remove it or detect once"
+- [ ] Add D input support for playstation controllers
+- [ ] Valorant "Live" image issue
+- [ ] ![alt text](image.png)
 
 ### Phase 1 — V1: fullscreen launcher, manual games, controller nav
 - [x] Solution split into Core / Service / Tray / Launcher projects
