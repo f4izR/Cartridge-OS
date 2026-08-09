@@ -111,6 +111,9 @@ Fullscreen launcher with controller nav, keyboard/mouse fallback, manual add-gam
 - [x] ~~Add a Remove Game feature~~ — done 2026-08-08, see log.
 - [ ] Valorant "Live" image issue
 - [ ] ![alt text](image.png)
+- [ ] ![alt text](image-1.png)
+- [ ] ![alt text](image-2.png)
+- [ ] ![alt text](image-3.png)
 
 ## Additional Entries (Continuation)
 
