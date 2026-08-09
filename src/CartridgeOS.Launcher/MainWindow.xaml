@@ -23,6 +23,66 @@
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
         <conv:EnumToBooleanConverter x:Key="EnumToBoolean" />
 
+        <!-- Tab control for Games vs Library view -->
+        <Style x:Key="GameTabControlStyle" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Tab headers -->
+                            <Border Grid.Row="0" Background="Transparent" Padding="24,0,24,12" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}">
+                                <TabPanel IsItemsHost="True" />
+                            </Border>
+
+                            <!-- Tab content -->
+                            <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="GameTabItemStyle" TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,8" />
+            <Setter Property="Margin" Value="0,0,20,0" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid>
+                            <Border x:Name="Border" Background="Transparent" BorderThickness="0,0,0,2" Padding="{TemplateBinding Padding}">
+                                <Border.BorderBrush>
+                                    <SolidColorBrush Color="Transparent" />
+                                </Border.BorderBrush>
+                                <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Implicit (no x:Key) so every ContextMenu/MenuItem in the app picks this up automatically —
              the native Win32-chrome default (gray, icon/check gutter, square corners) reads completely
              off-theme next to the rest of this app's flat dark cyan-accented look. -->
@@ -425,7 +485,6 @@
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -508,39 +567,72 @@
                 </StackPanel>
             </Grid>
 
-            <StackPanel Grid.Row="1" Margin="24,0,24,0"
-                        Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="Recent" Foreground="{StaticResource TextSecondaryBrush}"
-                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <ListBox ItemsSource="{Binding RecentGames}"
-                         SelectedItem="{Binding SelectedGame}"
-                         Background="Transparent" BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                         ItemContainerStyle="{StaticResource RecentTileStyle}"
-                         MouseDoubleClick="RecentGame_DoubleClick">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                </ListBox>
-            </StackPanel>
+            <!-- Two-Tab Interface: Games (Carousel) and Library (Grid) -->
+            <TabControl Grid.Row="1" Grid.RowSpan="2" Style="{StaticResource GameTabControlStyle}" SelectedIndex="{Binding CurrentTab}">
+                <!-- Games Tab: Carousel-style display with recent games -->
+                <TabItem Header="Games" Style="{StaticResource GameTabItemStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-            <ListBox x:Name="GameGrid" Grid.Row="2"
-                     ItemsSource="{Binding GamesView}"
-                     SelectedItem="{Binding SelectedGame}"
-                     Background="Transparent" BorderThickness="0"
-                     ScrollViewer.CanContentScroll="True"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     ItemContainerStyle="{StaticResource GameTileStyle}">
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-            </ListBox>
+                        <StackPanel Grid.Row="0" Margin="24,12,24,0"
+                                    Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Featured" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <ListBox ItemsSource="{Binding RecentGames}"
+                                     SelectedItem="{Binding SelectedGame}"
+                                     Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     ItemContainerStyle="{StaticResource RecentTileStyle}"
+                                     MouseDoubleClick="RecentGame_DoubleClick">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                            </ListBox>
+                        </StackPanel>
+
+                        <!-- All Games Grid in the Games Tab -->
+                        <ListBox x:Name="GamesTabGameGrid" Grid.Row="1"
+                                 ItemsSource="{Binding GamesView}"
+                                 SelectedItem="{Binding SelectedGame}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.CanContentScroll="True"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling"
+                                 ItemContainerStyle="{StaticResource GameTileStyle}">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                        </ListBox>
+                    </Grid>
+                </TabItem>
+
+                <!-- Library Tab: Full grid display of all games -->
+                <TabItem Header="Library" Style="{StaticResource GameTabItemStyle}">
+                    <ListBox x:Name="GameGrid"
+                             ItemsSource="{Binding GamesView}"
+                             SelectedItem="{Binding SelectedGame}"
+                             Background="Transparent" BorderThickness="0"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             ItemContainerStyle="{StaticResource GameTileStyle}"
+                             Margin="24">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                    </ListBox>
+                </TabItem>
+            </TabControl>
         </Grid>
 
         <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->

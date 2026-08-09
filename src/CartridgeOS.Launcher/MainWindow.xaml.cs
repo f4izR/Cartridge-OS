@@ -55,7 +55,7 @@ public partial class MainWindow : Window
         {
             // Windows' foreground-lock can leave a debugger-launched window without keyboard focus. Force it.
             Activate();
-            GameGrid.Focus();
+            GetActiveGameGrid().Focus();
         };
         Closed += (_, _) =>
         {
@@ -84,14 +84,22 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>Get the active game grid based on the current tab selection.</summary>
+    private ListBox GetActiveGameGrid()
+    {
+        var vm = (MainViewModel)DataContext;
+        return vm.CurrentTab == 0 ? GamesTabGameGrid : GameGrid;
+    }
+
     /// <summary>Called both by local keyboard handling above and by App forwarding real gamepad actions (App owns the GamepadWatcher).</summary>
     public void HandleGamepadAction(GamepadAction action)
     {
         var vm = (MainViewModel)DataContext;
+        var activeGrid = GetActiveGameGrid();
         var visibleGames = vm.GamesView.Cast<GameTileViewModel>().ToList(); // nav moves through whatever the search filter is currently showing, not the full library
         if (visibleGames.Count > 0)
         {
-            int columns = Math.Max(1, (int)(GameGrid.ActualWidth / TileFootprintWidth));
+            int columns = Math.Max(1, (int)(activeGrid.ActualWidth / TileFootprintWidth));
             int index = vm.SelectedGame is null ? 0 : visibleGames.IndexOf(vm.SelectedGame);
             if (index < 0) index = 0; // selected game got filtered out from under us
 
@@ -108,7 +116,7 @@ public partial class MainWindow : Window
             if (index != previousIndex) SoundService.PlayNavigate();
 
             vm.SelectedGame = visibleGames[index];
-            GameGrid.ScrollIntoView(vm.SelectedGame);
+            activeGrid.ScrollIntoView(vm.SelectedGame);
         }
 
         if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);

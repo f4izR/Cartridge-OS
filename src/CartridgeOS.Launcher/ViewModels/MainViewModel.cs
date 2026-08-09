@@ -59,6 +59,13 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _isSettingsOpen, value);
     }
 
+    private int _currentTab = 0; // 0 = Games, 1 = Library
+    public int CurrentTab
+    {
+        get => _currentTab;
+        set => SetProperty(ref _currentTab, value);
+    }
+
     private string _searchText = "";
     public string SearchText
     {
@@ -472,4 +479,5 @@ public sealed class MainViewModel : ViewModelBase
             db.AddGame(game);
         }
     }
+
 }
