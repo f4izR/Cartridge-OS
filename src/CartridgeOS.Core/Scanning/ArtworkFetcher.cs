@@ -70,6 +70,85 @@ public static class ArtworkFetcher
         }
     }
 
+    /// <summary>
+    /// Wide banner image for the Home screen's full-screen backdrop — SteamGridDB's "hero" asset type,
+    /// purpose-built for exactly this (landscape, ~3:1), unlike the portrait boxart ArtworkPath points to.
+    /// SteamGridDB-only (no TheGamesDB fallback here) — fetched lazily per-game by the caller, not eagerly
+    /// for the whole library, so this alone doesn't multiply request volume the way boxart fetching would.
+    /// </summary>
+    public static async Task<string?> FetchHeroAndCacheAsync(Game game)
+    {
+        string cachePath = Path.Combine(CacheDir, $"{Sanitize(game.Title)}_{game.Id}_hero.jpg");
+        if (File.Exists(cachePath))
+        {
+            Log($"{game.Title}: hero already cached at {cachePath}");
+            return cachePath;
+        }
+
+        if (!RateLimiter.IsAvailable(SteamGridDbSource))
+        {
+            Log($"{game.Title}: SteamGridDB is cooling down after a recent 429, skipping hero fetch");
+            return null;
+        }
+
+        string? url;
+        try
+        {
+            // Steam games can be looked up directly by their real appid — skips the fuzzy title-search step
+            // entirely and is more reliable than it for anything with an ambiguous or common title.
+            if (TryGetSteamAppId(game.ExecutablePath, out string appId))
+            {
+                url = await FetchSteamGridDbHeroUrlAsync($"steam/{appId}", game.Title);
+            }
+            else
+            {
+                int? gameId = await FindSteamGridDbGameIdAsync(game.Title);
+                url = gameId is null ? null : await FetchSteamGridDbHeroUrlAsync($"game/{gameId}", game.Title);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Log($"{game.Title}: SteamGridDB hero request failed — {ex.Message}");
+            return null;
+        }
+
+        if (url is null) return null;
+
+        Log($"{game.Title}: downloading hero {url}");
+        try
+        {
+            byte[] bytes = await Http.GetByteArrayAsync(url);
+            Directory.CreateDirectory(CacheDir);
+            await File.WriteAllBytesAsync(cachePath, bytes);
+            Log($"{game.Title}: hero saved to {cachePath} ({bytes.Length} bytes)");
+            return cachePath;
+        }
+        catch (HttpRequestException ex)
+        {
+            Log($"{game.Title}: hero download failed — {ex.Message}");
+            return null; // no hero for this game/appid, or a network issue — caller falls back to boxart
+        }
+    }
+
+    private static async Task<string?> FetchSteamGridDbHeroUrlAsync(string platformPath, string title)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://www.steamgriddb.com/api/v2/heroes/{platformPath}?dimensions=1920x620,3840x1240");
+        request.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
+        using var response = await Http.SendAsync(request);
+        if (HandleTooManyRequests(response, SteamGridDbSource, title)) return null;
+        if (!response.IsSuccessStatusCode)
+        {
+            Log($"{title}: SteamGridDB heroes/{platformPath} returned {(int)response.StatusCode} {response.ReasonPhrase}");
+            return null;
+        }
+        // Same {data:[{url:...}]} shape as the grids response — reused rather than duplicating an identical DTO.
+        var heroes = await response.Content.ReadFromJsonAsync<SteamGridDbGridsResponse>();
+        string? url = heroes?.Data?.FirstOrDefault()?.Url;
+        if (url is null) Log($"{title}: SteamGridDB matched but has no hero image for {platformPath}");
+        return url;
+    }
+
     // ponytail: plain append-to-file log, no rotation — this file stays tiny (one line per game per scan).
     private static void Log(string message)
     {
@@ -118,23 +197,8 @@ public static class ArtworkFetcher
 
         try
         {
-            using var searchRequest = new HttpRequestMessage(HttpMethod.Get,
-                $"https://www.steamgriddb.com/api/v2/search/autocomplete/{Uri.EscapeDataString(title)}");
-            searchRequest.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
-            using var searchResponse = await Http.SendAsync(searchRequest);
-            if (HandleTooManyRequests(searchResponse, SteamGridDbSource, title)) return null;
-            if (!searchResponse.IsSuccessStatusCode)
-            {
-                Log($"{title}: SteamGridDB search returned {(int)searchResponse.StatusCode} {searchResponse.ReasonPhrase}");
-                return null;
-            }
-            var search = await searchResponse.Content.ReadFromJsonAsync<SteamGridDbSearchResponse>();
-            int? gameId = search?.Data?.FirstOrDefault()?.Id;
-            if (gameId is null)
-            {
-                Log($"{title}: SteamGridDB search returned no matches");
-                return null;
-            }
+            int? gameId = await FindSteamGridDbGameIdAsync(title);
+            if (gameId is null) return null;
 
             using var gridsRequest = new HttpRequestMessage(HttpMethod.Get,
                 $"https://www.steamgriddb.com/api/v2/grids/game/{gameId}?dimensions=600x900");
@@ -156,6 +220,26 @@ public static class ArtworkFetcher
             Log($"{title}: SteamGridDB request failed — {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>Shared by the grids (boxart) and heroes (Home banner) lookups — SteamGridDB's fuzzy title
+    /// search to resolve its own internal game id. Callers must check RateLimiter.IsAvailable first.</summary>
+    private static async Task<int?> FindSteamGridDbGameIdAsync(string title)
+    {
+        using var searchRequest = new HttpRequestMessage(HttpMethod.Get,
+            $"https://www.steamgriddb.com/api/v2/search/autocomplete/{Uri.EscapeDataString(title)}");
+        searchRequest.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
+        using var searchResponse = await Http.SendAsync(searchRequest);
+        if (HandleTooManyRequests(searchResponse, SteamGridDbSource, title)) return null;
+        if (!searchResponse.IsSuccessStatusCode)
+        {
+            Log($"{title}: SteamGridDB search returned {(int)searchResponse.StatusCode} {searchResponse.ReasonPhrase}");
+            return null;
+        }
+        var search = await searchResponse.Content.ReadFromJsonAsync<SteamGridDbSearchResponse>();
+        int? gameId = search?.Data?.FirstOrDefault()?.Id;
+        if (gameId is null) Log($"{title}: SteamGridDB search returned no matches");
+        return gameId;
     }
 
     private static async Task<string?> FindTheGamesDbUrlAsync(string title)

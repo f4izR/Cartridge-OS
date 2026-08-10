@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -25,6 +26,7 @@ public sealed class MainViewModel : ViewModelBase
     private const int MaxRecentGames = 10;
     private const int BackgroundDecodeWidth = 1920; // full-screen backdrop, not a tile — decode much wider than GameTileViewModel's 200px
     private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(15); // ponytail: hardcoded until there's a settings screen to make it configurable
+    private static readonly DateTime ProcessStartTime = Process.GetCurrentProcess().StartTime; // "session" = this app run, not this particular window instance (which can be destroyed/recreated)
 
     private readonly GameDatabase _db;
     private readonly AppSettings _settings = SettingsStore.Load();
@@ -45,11 +47,45 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _hasRecentGames, value);
     }
 
+    private double _storageUsedPercent;
+    /// <summary>Percent used on the system drive — not per-drive-the-library-lives-on, just a general "how full is this PC" figure.</summary>
+    public double StorageUsedPercent
+    {
+        get => _storageUsedPercent;
+        private set => SetProperty(ref _storageUsedPercent, value);
+    }
+
+    private string _storageUsedLabel = "";
+    public string StorageUsedLabel
+    {
+        get => _storageUsedLabel;
+        private set => SetProperty(ref _storageUsedLabel, value);
+    }
+
+    private string _storageFreeLabel = "";
+    public string StorageFreeLabel
+    {
+        get => _storageFreeLabel;
+        private set => SetProperty(ref _storageFreeLabel, value);
+    }
+
+    private string _sessionUptimeLabel = "";
+    public string SessionUptimeLabel
+    {
+        get => _sessionUptimeLabel;
+        private set => SetProperty(ref _sessionUptimeLabel, value);
+    }
+
     private GameTileViewModel? _selectedGame;
     public GameTileViewModel? SelectedGame
     {
         get => _selectedGame;
-        set => SetProperty(ref _selectedGame, value);
+        set
+        {
+            if (!SetProperty(ref _selectedGame, value)) return;
+            OnPropertyChanged(nameof(IsContinuePlayingGameSelected));
+            _ = RefreshHomeBackgroundAsync();
+        }
     }
 
     private bool _isSettingsOpen;
@@ -59,12 +95,20 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _isSettingsOpen, value);
     }
 
-    private int _currentTab = 0; // 0 = Games, 1 = Library
-    public int CurrentTab
+    private AppScreen _selectedScreen = AppScreen.Home;
+    public AppScreen SelectedScreen
     {
-        get => _currentTab;
-        set => SetProperty(ref _currentTab, value);
+        get => _selectedScreen;
+        set
+        {
+            if (!SetProperty(ref _selectedScreen, value)) return;
+            OnPropertyChanged(nameof(IsHomeScreen));
+        }
     }
+
+    /// <summary>Drives the selection-follows-background behavior — deliberately Home-only; Library/Recently
+    /// Played get a plain gradient background regardless of WallpaperMode or SelectedGame.</summary>
+    public bool IsHomeScreen => SelectedScreen == AppScreen.Home;
 
     private string _searchText = "";
     public string SearchText
@@ -172,6 +216,22 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _customWallpaperImage, value);
     }
 
+    private ImageSource? _homeBackgroundImage;
+    /// <summary>Home's full-screen backdrop — decoded at BackgroundDecodeWidth (1920), not the ~200px tile
+    /// thumbnail (GameTileViewModel.Artwork), which is exactly why the background looked pixelated when it
+    /// was bound directly to that instead of this.</summary>
+    public ImageSource? HomeBackgroundImage
+    {
+        get => _homeBackgroundImage;
+        private set => SetProperty(ref _homeBackgroundImage, value);
+    }
+
+    // Session-only memory of which games already had a hero-image fetch attempted, so re-selecting a game
+    // with no hero (SteamGridDB has none, or it's not a Steam game SteamGridDB could resolve) doesn't hit
+    // the API again every time — hero fetching is lazy/per-selection, unlike boxart which fetches eagerly
+    // for the whole library, so this guard is what keeps it from re-requesting on every reselect.
+    private readonly HashSet<int> _heroFetchAttempted = [];
+
     public ICommand AddGameCommand { get; }
     public ICommand RemoveGameCommand { get; }
     public ICommand ChangeArtworkCommand { get; }
@@ -223,7 +283,7 @@ public sealed class MainViewModel : ViewModelBase
         RebuildRecentGames();
 
         _rescanTimer = new DispatcherTimer { Interval = RescanInterval };
-        _rescanTimer.Tick += async (_, _) => await RescanInBackgroundAsync();
+        _rescanTimer.Tick += async (_, _) => { await RescanInBackgroundAsync(); RefreshStorageStats(); };
         _rescanTimer.Start();
 
         IsOnline = NetworkInterface.GetIsNetworkAvailable();
@@ -233,6 +293,7 @@ public sealed class MainViewModel : ViewModelBase
         _statusTimer.Tick += (_, _) => UpdateClock();
         _statusTimer.Start();
         UpdateClock();
+        RefreshStorageStats();
     }
 
     public void StopBackgroundRescanning() => _rescanTimer.Stop();
@@ -256,6 +317,27 @@ public sealed class MainViewModel : ViewModelBase
         CurrentTimeText = $"{now:hh:mm} {(now.Hour < 12 ? "am" : "pm")}";
         CurrentDateText = now.ToString("ddd, d MMM", CultureInfo.InvariantCulture).ToUpperInvariant();
         RefreshBatteryDisplay(); // piggyback on the 1s tick to keep the device-battery fallback fresh too
+
+        var uptime = now - ProcessStartTime;
+        SessionUptimeLabel = uptime.TotalHours >= 1 ? $"{(int)uptime.TotalHours}h {uptime.Minutes}m" : $"{uptime.Minutes}m";
+    }
+
+    // Storage rarely changes fast enough to need second-level freshness — refreshed at startup and on
+    // the existing 15-minute rescan tick rather than adding a dedicated timer for it.
+    private void RefreshStorageStats()
+    {
+        try
+        {
+            var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory)!);
+            long usedBytes = drive.TotalSize - drive.AvailableFreeSpace;
+            StorageUsedPercent = drive.TotalSize > 0 ? 100.0 * usedBytes / drive.TotalSize : 0;
+            StorageUsedLabel = $"{usedBytes / 1_073_741_824.0:N0} GB used";
+            StorageFreeLabel = $"{drive.AvailableFreeSpace / 1_073_741_824.0:N0} GB free";
+        }
+        catch (IOException)
+        {
+            // drive not ready/accessible — leave whatever was last shown
+        }
     }
 
     private void RefreshBatteryDisplay()
@@ -272,6 +354,14 @@ public sealed class MainViewModel : ViewModelBase
         RebuildRecentGames();
     }
 
+    /// <summary>Persists elapsed playtime and updates the same tile in-memory — called once a directly-tracked
+    /// game process exits (see App.LaunchGame/OnGameExited; Steam/Xbox shell launches can't be timed this way).</summary>
+    public void RecordPlaytime(GameTileViewModel game, int minutes)
+    {
+        _db.AddPlaytime(game.Id, minutes);
+        game.AddPlaytime(minutes);
+    }
+
     private void RebuildRecentGames()
     {
         RecentGames.Clear();
@@ -281,7 +371,23 @@ public sealed class MainViewModel : ViewModelBase
             RecentGames.Add(game);
 
         HasRecentGames = RecentGames.Count > 0;
+        OnPropertyChanged(nameof(ContinuePlayingGame));
+        OnPropertyChanged(nameof(HasContinuePlayingGame));
+        OnPropertyChanged(nameof(OtherRecentGames));
+        OnPropertyChanged(nameof(IsContinuePlayingGameSelected));
     }
+
+    /// <summary>The single most-recently-played game — the Recently Played screen's hero card.</summary>
+    public GameTileViewModel? ContinuePlayingGame => RecentGames.FirstOrDefault();
+    public bool HasContinuePlayingGame => ContinuePlayingGame is not null;
+
+    /// <summary>Drives the hero card's highlighted-gradient background — only lit up while it's actually the
+    /// selected tile; selecting a different game (e.g. in the 2x2 grid below) drops it back to a plain card,
+    /// same as every other tile's unselected state.</summary>
+    public bool IsContinuePlayingGameSelected => SelectedGame is not null && ReferenceEquals(SelectedGame, ContinuePlayingGame);
+
+    /// <summary>The next 4 most-recent games after the hero — fills the 2x2 grid, for 5 recently-played games total.</summary>
+    public IEnumerable<GameTileViewModel> OtherRecentGames => RecentGames.Skip(1).Take(4);
 
     private void AddGame()
     {
@@ -396,6 +502,33 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task LoadCustomWallpaperAsync(string path) =>
         CustomWallpaperImage = await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+
+    /// <summary>Redecodes the Home background at full resolution for whichever game is now selected — prefers
+    /// the wide hero image once one's been fetched, falls back to a high-res decode of the portrait boxart in
+    /// the meantime (or permanently, if no hero is ever found). Also kicks off a lazy hero fetch the first
+    /// time each game is selected without one.</summary>
+    private async Task RefreshHomeBackgroundAsync()
+    {
+        var game = SelectedGame;
+        string? path = game?.HeroImagePath ?? game?.ArtworkPath;
+        HomeBackgroundImage = string.IsNullOrEmpty(path) ? null : await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+
+        if (game is not null && game.HeroImagePath is null && _heroFetchAttempted.Add(game.Id))
+            _ = FetchHeroThenRefreshAsync(game);
+    }
+
+    private async Task FetchHeroThenRefreshAsync(GameTileViewModel tile)
+    {
+        // FetchHeroAndCacheAsync only reads Id/Title/ExecutablePath — a throwaway snapshot is simpler than
+        // threading the original Core.Models.Game back through from wherever tile was first constructed.
+        var snapshot = new Game { Id = tile.Id, Title = tile.Title, ExecutablePath = tile.ExecutablePath };
+        string? heroPath = await ArtworkFetcher.FetchHeroAndCacheAsync(snapshot);
+        if (heroPath is null) return;
+
+        _db.UpdateHeroImagePath(tile.Id, heroPath);
+        tile.SetHeroImagePath(heroPath);
+        if (ReferenceEquals(SelectedGame, tile)) await RefreshHomeBackgroundAsync(); // swap the boxart-based backdrop for the real hero now that it's ready
+    }
 
     private void ScanForGames() => ImportScannedGames(ScanTrustedLauncherSources());
 

@@ -22,65 +22,148 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
         <conv:EnumToBooleanConverter x:Key="EnumToBoolean" />
+        <conv:EnumToVisibilityConverter x:Key="EnumToVisibility" />
+        <conv:PercentToPixelWidthConverter x:Key="PercentToPixelWidth" />
 
-        <!-- Tab control for Games vs Library view -->
-        <Style x:Key="GameTabControlStyle" TargetType="TabControl">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TabControl">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-
-                            <!-- Tab headers -->
-                            <Border Grid.Row="0" Background="Transparent" Padding="24,0,24,12" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}">
-                                <TabPanel IsItemsHost="True" />
-                            </Border>
-
-                            <!-- Tab content -->
-                            <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="GameTabItemStyle" TargetType="TabItem">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0,8" />
-            <Setter Property="Margin" Value="0,0,20,0" />
+        <!-- Home/Recently Played/Library nav bar: a rounded pill group, RadioButtons bound to
+             MainViewModel.SelectedScreen via EnumToBoolean (same pattern the Settings wallpaper-mode
+             radio buttons already use) — matches a reference design the user supplied. -->
+        <Style x:Key="NavTabStyle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="16,8" />
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="TabItem">
-                        <Grid>
-                            <Border x:Name="Border" Background="Transparent" BorderThickness="0,0,0,2" Padding="{TemplateBinding Padding}">
-                                <Border.BorderBrush>
-                                    <SolidColorBrush Color="Transparent" />
-                                </Border.BorderBrush>
-                                <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                        </Grid>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bg" CornerRadius="18" Padding="{TemplateBinding Padding}"
+                                Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
                                 <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="ScreenPlaceholderTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Circular play button on the Recently Played hero card. -->
+        <Style x:Key="PlayCircleButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Background" Value="{StaticResource BrandCyanBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+            <!-- Baked in here, not left to whoever sets Content="&#xE768;" to remember — a Segoe MDL2 Assets
+                 glyph rendered in the default font falls back to the "missing character" box (a hollow square),
+                 which is exactly what was happening before this was added. -->
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="Circle" Fill="{TemplateBinding Background}" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Circle" Property="Fill" Value="{StaticResource BrandCyanHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Circle" Property="Fill" Value="{StaticResource BrandCyanPressedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Recently Played's small-tile rows: bigger artwork than the vertical poster tiles elsewhere
+             (per explicit request), title + playtime, chevron — a horizontal card, not a poster. -->
+        <Style x:Key="RecentRowStyle" TargetType="ListBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <!-- Card min-height and the artwork square below (RecentArtworkSize) are the two knobs that
+                             control this row's overall size — bump RecentArtworkSize for bigger art, MinHeight to
+                             match (art + 2x Padding, so it isn't cropped/squeezed). -->
+                        <Border x:Name="Card" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="10" Padding="16" MinHeight="132"
+                                BorderThickness="1" BorderBrush="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10"
+                                        Background="{StaticResource SurfaceHoverBrush}">
+                                    <TextBlock Text="🎮" FontSize="34" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                                </Border>
+                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="16,0,10,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding PlaytimeLabel}" Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="13" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SystemOverviewIconStyle" TargetType="Border">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style x:Key="SystemOverviewLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <Style x:Key="SystemOverviewValueStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="Bold" />
         </Style>
 
         <!-- Implicit (no x:Key) so every ContextMenu/MenuItem in the app picks this up automatically —
@@ -176,10 +259,15 @@
                                     </Border.Background>
                                 </Border>
                                 <Border Grid.Row="0" Margin="10" CornerRadius="6" Background="{StaticResource SurfaceHoverBrush}">
-                                    <Grid>
-                                        <TextBlock Text="🎮" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
-                                        <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
-                                    </Grid>
+                                    <TextBlock Text="🎮" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                                </Border>
+                                <!-- Artwork as the Border's own Background (not a child Image) — Border.CornerRadius only
+                                     ever clips its own background paint, never arbitrary child content, so this is what
+                                     actually gives the artwork rounded corners instead of square ones poking out. -->
+                                <Border Grid.Row="0" Margin="10" CornerRadius="6">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
                                 </Border>
                                 <TextBlock Grid.Row="1" Text="{Binding Title}"
                                            Foreground="{StaticResource TextPrimaryBrush}" FontSize="15" FontWeight="SemiBold"
@@ -193,6 +281,109 @@
                                         Visibility="{Binding IsLaunching, Converter={StaticResource BoolToVisibility}}">
                                     <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
                                                FontSize="14" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1.08" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1.08" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <ColorAnimation Storyboard.TargetName="Tile"
+                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                            To="#49C1ED" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="AccentTint"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.08" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1" Duration="0:0:0.15" />
+                                            <ColorAnimation Storyboard.TargetName="Tile"
+                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                            To="Transparent" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="AccentTint"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Home's carousel — deliberately its own style, not a reuse of RecentTileStyle/GameTileStyle, so
+             sizing it up for a "PS5 home" feel doesn't also grow tiles elsewhere that reuse those styles. -->
+        <Style x:Key="HomeCarouselTileStyle" TargetType="ListBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="ContextMenu" Value="{StaticResource GameTileContextMenu}" />
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="GameTile_PreviewMouseRightButtonDown" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Tile"
+                                Width="240" Height="330" Margin="14"
+                                CornerRadius="12"
+                                Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderThickness="3">
+                            <Border.BorderBrush>
+                                <SolidColorBrush Color="Transparent" />
+                            </Border.BorderBrush>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Border x:Name="AccentTint" Grid.RowSpan="2" CornerRadius="12" Opacity="0" IsHitTestVisible="False">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="#51E7ED" />
+                                    </Border.Background>
+                                </Border>
+                                <Border Grid.Row="0" Margin="14" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
+                                    <TextBlock Text="🎮" FontSize="52" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                                </Border>
+                                <Border Grid.Row="0" Margin="14" CornerRadius="9">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <TextBlock Grid.Row="1" Text="{Binding Title}"
+                                           Foreground="{StaticResource TextPrimaryBrush}" FontSize="18" FontWeight="SemiBold"
+                                           Margin="14,0,14,16" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
+
+                                <Border Grid.RowSpan="2" CornerRadius="12" Background="#B0000000"
+                                        Visibility="{Binding IsLaunching, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                             </Grid>
@@ -278,10 +469,12 @@
                                     </Border.Background>
                                 </Border>
                                 <Border Grid.Row="0" Margin="8" CornerRadius="5" Background="{StaticResource SurfaceHoverBrush}">
-                                    <Grid>
-                                        <TextBlock Text="🎮" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
-                                        <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
-                                    </Grid>
+                                    <TextBlock Text="🎮" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                                </Border>
+                                <Border Grid.Row="0" Margin="8" CornerRadius="5">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
                                 </Border>
                                 <TextBlock Grid.Row="1" Text="{Binding Title}"
                                            Foreground="{StaticResource TextPrimaryBrush}" FontSize="12" FontWeight="SemiBold"
@@ -364,7 +557,9 @@
                     <ControlTemplate TargetType="TabControl">
                         <DockPanel>
                             <TabPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
-                            <ContentPresenter Margin="20,0,0,0" ContentSource="SelectedContent" />
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20,0,0,0">
+                                <ContentPresenter ContentSource="SelectedContent" />
+                            </ScrollViewer>
                         </DockPanel>
                     </ControlTemplate>
                 </Setter.Value>
@@ -399,6 +594,23 @@
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <!-- One labeled action within a settings section: bold sub-label, a one-line explanation of what it
+             does, then the control itself — same "label, then help text, then control" shape most settings
+             UIs (Windows Settings, Steam) use, rather than a bare unexplained button. -->
+        <Style x:Key="SettingsActionLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+
+        <Style x:Key="SettingsDescriptionStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
 
@@ -456,28 +668,42 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- PS5-menu-style backdrop: either the selected game's artwork or a user-picked wallpaper, blurred and dimmed behind everything else. -->
-        <Image x:Name="BackgroundArt" Grid.ColumnSpan="2"
-               Source="{Binding SelectedGame.Artwork}"
-               Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource BoolToVisibility}}"
-               Stretch="UniformToFill" Opacity="0.85" IsHitTestVisible="False">
-            <Image.Effect>
-                <BlurEffect Radius="10" />
-            </Image.Effect>
-        </Image>
-        <Image x:Name="CustomBackgroundArt" Grid.ColumnSpan="2"
-               Source="{Binding CustomWallpaperImage}"
-               Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource InverseBoolToVisibility}}"
-               Stretch="UniformToFill" Opacity="0.95" IsHitTestVisible="False">
-            <Image.Effect>
-                <BlurEffect Radius="20" />
-            </Image.Effect>
-        </Image>
-        <Border Grid.ColumnSpan="2" IsHitTestVisible="False">
+        <!-- Home only: crisp, unblurred selected-game artwork (or the custom wallpaper) — the one screen
+             where the background follows selection. UniformToFill crops-to-fill rather than distorting, so
+             the art fills this rectangular frame without stretching regardless of its own aspect ratio. -->
+        <Grid Grid.ColumnSpan="2" IsHitTestVisible="False"
+              Visibility="{Binding IsHomeScreen, Converter={StaticResource BoolToVisibility}}">
+            <!-- HomeBackgroundImage, not SelectedGame.Artwork: that's the ~200px tile thumbnail, badly
+                 pixelated when stretched full-screen — this is redecoded at 1920px (or the wide SteamGridDB
+                 hero image, once fetched) specifically for this. -->
+            <Image x:Name="BackgroundArt"
+                   Source="{Binding HomeBackgroundImage}"
+                   Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource BoolToVisibility}}"
+                   Stretch="UniformToFill" />
+            <Image x:Name="CustomBackgroundArt"
+                   Source="{Binding CustomWallpaperImage}"
+                   Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource InverseBoolToVisibility}}"
+                   Stretch="UniformToFill" />
+            <!-- Bottom-up fade so the carousel/details text over it stays legible regardless of what the
+                 art looks like there — there's no blur to fall back on for that here. -->
+            <Border>
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#000E1420" Offset="0.5" />
+                        <GradientStop Color="#D00E1420" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.Background>
+            </Border>
+        </Grid>
+
+        <!-- Library / Recently Played: a plain themed gradient, not image- or selection-driven — placeholder
+             look for now, revisit once those screens have their own real design. -->
+        <Border Grid.ColumnSpan="2" IsHitTestVisible="False"
+                Visibility="{Binding IsHomeScreen, Converter={StaticResource InverseBoolToVisibility}}">
             <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#400E1420" Offset="0" />
-                    <GradientStop Color="#900E1420" Offset="1" />
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#0D1016" Offset="0" />
+                    <GradientStop Color="#1B2028" Offset="1" />
                 </LinearGradientBrush>
             </Border.Background>
         </Border>
@@ -492,21 +718,43 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Image Grid.Column="0" Source="Assets/logo-with-name.png" Height="40"
                        HorizontalAlignment="Left" Stretch="Uniform" />
+
+                <!-- Home / Recently Played / Library — true top-center regardless of the logo's/status area's
+                     width, since it spans the whole header row and centers within that full span rather than
+                     living inside either side column. -->
+                <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center"
+                        CornerRadius="22" Padding="4"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Home}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Home" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=RecentlyPlayed}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Recently Played" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Library}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Library" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+                    </StackPanel>
+                </Border>
+
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
-                    <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
-                    <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" />
-                    <Button Content="Remove Game" Command="{Binding RemoveGameCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}" />
-                </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
                     <!-- Battery: whichever device actually has one to report — a connected controller if it reports a level, otherwise this machine's own. -->
                     <Border Style="{StaticResource StatusPillStyle}"
                             Visibility="{Binding HasBatteryInfo, Converter={StaticResource BoolToVisibility}}">
@@ -567,72 +815,225 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Two-Tab Interface: Games (Carousel) and Library (Grid) -->
-            <TabControl Grid.Row="1" Grid.RowSpan="2" Style="{StaticResource GameTabControlStyle}" SelectedIndex="{Binding CurrentTab}">
-                <!-- Games Tab: Carousel-style display with recent games -->
-                <TabItem Header="Games" Style="{StaticResource GameTabItemStyle}">
-                    <Grid>
+            <Grid Grid.Row="1">
+                <!-- Home: the selected game's own art fills the whole screen behind this (see the background
+                     layer above — Home is the only screen where selection drives the backdrop). Details +
+                     carousel anchored to the bottom, per request, rather than the top like the reference image. -->
+                <Grid Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Home}">
+                    <Grid Margin="40,0,40,32" VerticalAlignment="Bottom">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Margin="24,12,24,0"
-                                    Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="Featured" Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
-                            <ListBox ItemsSource="{Binding RecentGames}"
-                                     SelectedItem="{Binding SelectedGame}"
-                                     Background="Transparent" BorderThickness="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                     ItemContainerStyle="{StaticResource RecentTileStyle}"
-                                     MouseDoubleClick="RecentGame_DoubleClick">
-                                <ListBox.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ListBox.ItemsPanel>
-                            </ListBox>
+                        <!-- PS5-style big title. Margin bottom is the "spacing between game name and tiles" knob. -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,44">
+                            <TextBlock Text="{Binding SelectedGame.Title}" Foreground="White" FontSize="56" FontWeight="Bold"
+                                       TextWrapping="Wrap" Margin="0,0,0,14" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                                <TextBlock Text="{Binding SelectedGame.LastPlayedLabel}" Foreground="#D7E9FF" FontSize="14" Margin="0,0,20,0" />
+                                <TextBlock Text="{Binding SelectedGame.PlaytimeLabel}" Foreground="#D7E9FF" FontSize="14" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource PlayCircleButtonStyle}" Content="&#xE768;"
+                                        Click="HomePlay_Click" Margin="0,0,14,0" />
+                                <TextBlock Text="Press A to Play" Foreground="White" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
                         </StackPanel>
 
-                        <!-- All Games Grid in the Games Tab -->
-                        <ListBox x:Name="GamesTabGameGrid" Grid.Row="1"
+                        <!-- Carousel — its own bigger tile style (HomeCarouselTileStyle) for the PS5-dashboard
+                             feel. Left/Right wraps around (see HandleGamepadAction) for an endless-feeling
+                             carousel with keyboard/gamepad; mouse users can still drag the scrollbar normally. -->
+                        <ListBox x:Name="HomeCarousel" Grid.Row="1"
                                  ItemsSource="{Binding GamesView}"
                                  SelectedItem="{Binding SelectedGame}"
+                                 IsSynchronizedWithCurrentItem="False"
                                  Background="Transparent" BorderThickness="0"
-                                 ScrollViewer.CanContentScroll="True"
-                                 VirtualizingPanel.IsVirtualizing="True"
-                                 VirtualizingPanel.VirtualizationMode="Recycling"
-                                 ItemContainerStyle="{StaticResource GameTileStyle}">
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 ItemContainerStyle="{StaticResource HomeCarouselTileStyle}"
+                                 MouseDoubleClick="RecentGame_DoubleClick"
+                                 SelectionChanged="HomeCarousel_SelectionChanged">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
+                                    <StackPanel Orientation="Horizontal" />
                                 </ItemsPanelTemplate>
                             </ListBox.ItemsPanel>
                         </ListBox>
                     </Grid>
-                </TabItem>
+                </Grid>
 
-                <!-- Library Tab: Full grid display of all games -->
-                <TabItem Header="Library" Style="{StaticResource GameTabItemStyle}">
-                    <ListBox x:Name="GameGrid"
-                             ItemsSource="{Binding GamesView}"
-                             SelectedItem="{Binding SelectedGame}"
-                             Background="Transparent" BorderThickness="0"
-                             ScrollViewer.CanContentScroll="True"
-                             VirtualizingPanel.IsVirtualizing="True"
-                             VirtualizingPanel.VirtualizationMode="Recycling"
-                             ItemContainerStyle="{StaticResource GameTileStyle}"
-                             Margin="24">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                    </ListBox>
-                </TabItem>
-            </TabControl>
+                <Grid Margin="24"
+                      Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=RecentlyPlayed}">
+                    <TextBlock Text="No games played yet — your recently played games will show up here."
+                               Style="{StaticResource ScreenPlaceholderTextStyle}"
+                               Visibility="{Binding HasRecentGames, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                    <!-- Condensed, not full-bleed: 3 columns x 3 rows (fixed-size content, centered in the
+                         available space) — row 0 spans all 3 columns for the hero; rows 1-2 hold a 2x2 grid
+                         of the next 4 recent games (cols 0-1) beside the stats panel (col 2, spanning both
+                         rows) — 1 hero + 4 grid tiles = 5 recently-played games shown in total. -->
+                    <Grid MaxWidth="1240" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="300" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Row 0: Continue Playing — the single most-recently-played game, full width. The
+                             highlighted gradient only shows while this is the actually-selected tile (click it,
+                             or land here via keyboard/gamepad nav once that's wired up); selecting a different
+                             game elsewhere drops it back to the same plain card look every other tile has. -->
+                        <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="220" Margin="0,0,0,20"
+                                Visibility="{Binding HasContinuePlayingGame, Converter={StaticResource BoolToVisibility}}"
+                                Cursor="Hand" MouseLeftButtonUp="ContinuePlayingCard_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsContinuePlayingGameSelected}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource HeroGradientBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid Margin="28">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <!-- HeroArtworkSize knob: 170 here (both Width and Height) controls the hero image size;
+                                     the hero card's own MinHeight above should grow to match if you size this up a lot. -->
+                                <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12" Background="#22000000">
+                                    <TextBlock Text="🎮" FontSize="50" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
+                                </Border>
+                                <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding ContinuePlayingGame.Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="CONTINUE PLAYING" Foreground="#D7E9FF" FontSize="12" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <TextBlock Text="{Binding ContinuePlayingGame.Title}" Foreground="White" FontSize="30" FontWeight="Bold"
+                                               TextWrapping="Wrap" Margin="0,0,0,12" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                                                Visibility="{Binding ContinuePlayingGame.HasSourceLabel, Converter={StaticResource BoolToVisibility}}">
+                                        <Border Background="#2A3B6B" CornerRadius="4" Padding="8,3">
+                                            <TextBlock Text="{Binding ContinuePlayingGame.SourceLabel}" Foreground="White" FontSize="11" FontWeight="Bold" />
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                        <TextBlock Text="{Binding ContinuePlayingGame.LastPlayedLabel}" Foreground="#D7E9FF" FontSize="13" Margin="0,0,20,0" />
+                                        <TextBlock Text="{Binding ContinuePlayingGame.PlaytimeLabel}" Foreground="#D7E9FF" FontSize="13" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Style="{StaticResource PlayCircleButtonStyle}" Content="&#xE768;"
+                                                Click="ContinuePlaying_Click" Margin="0,0,14,0" />
+                                        <TextBlock Text="Press A to Play" Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Rows 1-2, columns 0-1: the next 4 recent games, 2x2. -->
+                        <ListBox Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,20,0"
+                                 ItemsSource="{Binding OtherRecentGames}"
+                                 SelectedItem="{Binding SelectedGame}"
+                                 IsSynchronizedWithCurrentItem="False"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 ItemContainerStyle="{StaticResource RecentRowStyle}"
+                                 MouseDoubleClick="RecentGame_DoubleClick">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2" Rows="2" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                        </ListBox>
+
+                        <!-- Rows 1-2, column 2: system stats, spanning the same height as the 2x2 grid beside it. -->
+                        <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" CornerRadius="14" Padding="20"
+                                Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="SYSTEM OVERVIEW" Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="11" FontWeight="Bold" Margin="0,0,0,16" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <Border Style="{StaticResource SystemOverviewIconStyle}">
+                                        <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                                   Foreground="{StaticResource BrandCyanBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Games.Count}" Style="{StaticResource SystemOverviewValueStyle}" />
+                                        <TextBlock Text="Games Installed" Style="{StaticResource SystemOverviewLabelStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <Border Style="{StaticResource SystemOverviewIconStyle}">
+                                        <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                                   Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding StorageUsedPercent, StringFormat={}{0:N0}%}" Style="{StaticResource SystemOverviewValueStyle}" />
+                                        <TextBlock Text="Storage Used" Style="{StaticResource SystemOverviewLabelStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                                    <Border Style="{StaticResource SystemOverviewIconStyle}">
+                                        <TextBlock Text="&#xE917;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                                   Foreground="{StaticResource InformationBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SessionUptimeLabel}" Style="{StaticResource SystemOverviewValueStyle}" />
+                                        <TextBlock Text="Session Uptime" Style="{StaticResource SystemOverviewLabelStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding StorageUsedLabel}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+                                    <TextBlock Grid.Column="1" Text="{Binding StorageFreeLabel}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+                                </Grid>
+                                <Grid Height="6">
+                                    <Border CornerRadius="3" Background="{StaticResource SurfaceHoverBrush}" />
+                                    <Border CornerRadius="3" Background="{StaticResource SuccessBrush}" HorizontalAlignment="Left"
+                                            Width="{Binding StorageUsedPercent, Converter={StaticResource PercentToPixelWidth}, ConverterParameter=260}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <ListBox x:Name="GameGrid"
+                         Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}"
+                         ItemsSource="{Binding GamesView}"
+                         SelectedItem="{Binding SelectedGame}"
+                         IsSynchronizedWithCurrentItem="False"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.CanContentScroll="True"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         ItemContainerStyle="{StaticResource GameTileStyle}"
+                         Margin="24,0,24,24" SelectionChanged="GameGrid_SelectionChanged">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <vwp:VirtualizingWrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                </ListBox>
+            </Grid>
         </Grid>
 
         <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
@@ -646,6 +1047,37 @@
 
                 <TabControl Style="{StaticResource SettingsTabControlStyle}">
                     <!-- One category per TabItem. Add the next one (e.g. "Interface", "Controller") the same way. -->
+                    <TabItem Header="Library" Style="{StaticResource SettingsTabItemStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Scan &amp; Detect" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                            <TextBlock Text="Trusted Sources" Style="{StaticResource SettingsActionLabelStyle}" />
+                            <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                       Text="Looks for games already installed through Steam, Epic, GOG, Ubisoft, EA, Battle.net, and Riot." />
+                            <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                            <TextBlock Text="Everything Else" Style="{StaticResource SettingsActionLabelStyle}" />
+                            <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                       Text="A broader heuristic scan for standalone executables and Xbox/Store apps. Results need your confirmation before they're added." />
+                            <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                            <TextBlock Text="Manage Games" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                            <TextBlock Text="Add Manually" Style="{StaticResource SettingsActionLabelStyle}" />
+                            <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                       Text="Pick an executable directly — useful for anything the scanners above didn't find." />
+                            <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                            <TextBlock Text="Remove Selected" Style="{StaticResource SettingsActionLabelStyle}" />
+                            <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                       Text="Removes whatever game is currently selected in your library. Only removes it from Cartridge OS — the game itself isn't touched." />
+                            <Button Content="Remove Game" Command="{Binding RemoveGameCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </TabItem>
                     <TabItem Header="Wallpaper" Style="{StaticResource SettingsTabItemStyle}">
                         <StackPanel>
                             <TextBlock Text="Background" Style="{StaticResource SettingsSectionHeadingStyle}" />

@@ -298,11 +298,19 @@ public partial class App : Application
 
         _runningGameProcess = process;
         _runningGameTitle = game.Title;
+        var startedAtUtc = DateTime.UtcNow;
 
         try
         {
             process.EnableRaisingEvents = true;
-            process.Exited += (_, _) => Dispatcher.BeginInvoke(OnGameExited);
+            process.Exited += (_, _) => Dispatcher.BeginInvoke(() =>
+            {
+                // Whole minutes, not fractional — matches the "Xh Ym" display granularity, and avoids
+                // recording a few seconds of playtime for a game that failed to start and exited immediately.
+                int minutes = (int)(DateTime.UtcNow - startedAtUtc).TotalMinutes;
+                if (minutes > 0) vm.RecordPlaytime(game, minutes);
+                OnGameExited();
+            });
         }
         catch (InvalidOperationException)
         {

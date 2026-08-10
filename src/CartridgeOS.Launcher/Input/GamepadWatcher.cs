@@ -27,6 +27,8 @@ public sealed class GamepadWatcher
         [GamepadButton.B] = GamepadAction.Back,
         [GamepadButton.Y] = GamepadAction.Secondary,
         [GamepadButton.Start] = GamepadAction.Menu,
+        [GamepadButton.LeftShoulder] = GamepadAction.PreviousTab,
+        [GamepadButton.RightShoulder] = GamepadAction.NextTab,
     };
 
     private static readonly TimeSpan BatteryCheckInterval = TimeSpan.FromSeconds(10); // battery queries are a real syscall each time — not worth doing every 33ms poll

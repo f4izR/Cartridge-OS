@@ -28,6 +28,51 @@ public sealed partial class GameTileViewModel : ViewModelBase
     public string Title => _game.Title;
     public string ExecutablePath => _game.ExecutablePath;
 
+    /// <summary>Portrait boxart path — consumed directly (not via the decoded Artwork bitmap) by MainViewModel
+    /// when it needs its own higher-resolution decode, e.g. for the Home background.</summary>
+    public string? ArtworkPath => _game.ArtworkPath;
+
+    /// <summary>Wide banner for the Home background, fetched lazily — see MainViewModel.RefreshHomeBackgroundAsync.</summary>
+    public string? HeroImagePath => _game.HeroImagePath;
+
+    /// <summary>Only reliably knowable from the exe path itself for Steam (steam:// URI) and Xbox/Store (shell:appsFolder) —
+    /// every other launcher (Epic/GOG/Ubisoft/EA/Battle.net/Riot/manual) launches via a plain exe path with no marker to
+    /// tell them apart, so this is null there rather than guessing.</summary>
+    public string? SourceLabel =>
+        ExecutablePath.StartsWith("steam://", StringComparison.OrdinalIgnoreCase) ? "STEAM" :
+        ExecutablePath.StartsWith("shell:appsFolder", StringComparison.OrdinalIgnoreCase) ? "XBOX" :
+        null;
+
+    public bool HasSourceLabel => SourceLabel is not null;
+
+    /// <summary>Total playtime tracked so far. Only accumulates for directly-launched exes — Steam/Xbox shell
+    /// launches have no trackable Process to time (same limitation as the in-game overlay, see context.md).</summary>
+    public int TotalPlaytimeMinutes => _game.TotalPlaytimeMinutes;
+
+    public string PlaytimeLabel
+    {
+        get
+        {
+            if (TotalPlaytimeMinutes <= 0) return "Not played yet";
+            int hours = TotalPlaytimeMinutes / 60;
+            int minutes = TotalPlaytimeMinutes % 60;
+            return hours > 0 ? $"{hours}h {minutes}m total" : $"{minutes}m total";
+        }
+    }
+
+    public string LastPlayedLabel
+    {
+        get
+        {
+            if (LastPlayedUtc is not { } lastPlayed) return "Never played";
+            var elapsed = DateTime.UtcNow - lastPlayed;
+            if (elapsed.TotalMinutes < 1) return "Just now";
+            if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes}m ago";
+            if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours}h ago";
+            return $"{(int)elapsed.TotalDays}d ago";
+        }
+    }
+
     [ObservableProperty]
     private ImageSource? _artwork;
 
@@ -39,6 +84,24 @@ public sealed partial class GameTileViewModel : ViewModelBase
     private bool _isLaunching;
 
     public void MarkPlayedNow() => LastPlayedUtc = DateTime.UtcNow;
+
+    /// <summary>Updates this tile's in-memory playtime after App persists the same amount to the DB — the
+    /// launcher window (and this instance) can outlive a play session (minimize, not destroy), so the DB
+    /// write alone wouldn't be reflected here until the whole viewmodel graph gets rebuilt from scratch.</summary>
+    public void AddPlaytime(int minutes)
+    {
+        _game.TotalPlaytimeMinutes += minutes;
+        OnPropertyChanged(nameof(TotalPlaytimeMinutes));
+        OnPropertyChanged(nameof(PlaytimeLabel));
+    }
+
+    /// <summary>Doesn't touch the tile's own Artwork bitmap — HeroImagePath is only ever consumed by
+    /// MainViewModel for the Home background, never rendered on the tile itself.</summary>
+    public void SetHeroImagePath(string heroImagePath)
+    {
+        _game.HeroImagePath = heroImagePath;
+        OnPropertyChanged(nameof(HeroImagePath));
+    }
 
     public void SetArtworkPath(string artworkPath)
     {

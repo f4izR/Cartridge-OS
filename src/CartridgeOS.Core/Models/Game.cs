@@ -8,4 +8,9 @@ public sealed class Game
     public string? ArtworkPath { get; set; }
     public string? LaunchArgs { get; set; }
     public DateTime? LastPlayedUtc { get; set; }
+    public int TotalPlaytimeMinutes { get; set; }
+
+    /// <summary>Wide banner image for the Home screen's full-screen backdrop — separate from ArtworkPath
+    /// (portrait boxart), fetched lazily since most of the library never actually shows on Home.</summary>
+    public string? HeroImagePath { get; set; }
 }

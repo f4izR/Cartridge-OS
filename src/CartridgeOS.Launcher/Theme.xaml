@@ -15,6 +15,13 @@
         <GradientStop Color="{StaticResource BrandDeepBlueColor}" Offset="1" />
     </LinearGradientBrush>
 
+    <!-- Same blue hue family as BrandGradientBrush, darkened/muted for a large selected-state background
+         (e.g. the Recently Played hero card) where the full-brightness brand gradient reads as too bright. -->
+    <LinearGradientBrush x:Key="HeroGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#1B3A56" Offset="0" />
+        <GradientStop Color="#0E1F30" Offset="1" />
+    </LinearGradientBrush>
+
     <!-- Backgrounds -->
     <SolidColorBrush x:Key="BackgroundBrush" Color="#0D1016" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#14171D" />

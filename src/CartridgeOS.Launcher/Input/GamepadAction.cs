@@ -14,4 +14,6 @@ public enum GamepadAction
     Back,
     Secondary,
     Menu,
+    PreviousTab,
+    NextTab,
 }

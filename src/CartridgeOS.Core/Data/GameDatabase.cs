@@ -19,10 +19,32 @@ public sealed class GameDatabase
                 ExecutablePath TEXT NOT NULL,
                 ArtworkPath TEXT,
                 LaunchArgs TEXT,
-                LastPlayedUtc TEXT
+                LastPlayedUtc TEXT,
+                TotalPlaytimeMinutes INTEGER NOT NULL DEFAULT 0,
+                HeroImagePath TEXT
             );
             """;
         command.ExecuteNonQuery();
+
+        // ponytail: no migration framework in this app (see context.md) — an existing DB from before these
+        // columns existed just gets them added once; SQLite has no "ADD COLUMN IF NOT EXISTS", so the
+        // duplicate-column error on a DB that already has one is the expected, swallowed case, not a failure.
+        AddColumnIfMissing(connection, "TotalPlaytimeMinutes", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "HeroImagePath", "TEXT");
+    }
+
+    private static void AddColumnIfMissing(SqliteConnection connection, string columnName, string columnDefinition)
+    {
+        try
+        {
+            using var addColumn = connection.CreateCommand();
+            addColumn.CommandText = $"ALTER TABLE Games ADD COLUMN {columnName} {columnDefinition};";
+            addColumn.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // column already exists
+        }
     }
 
     private SqliteConnection OpenConnection()
@@ -69,6 +91,28 @@ public sealed class GameDatabase
         command.ExecuteNonQuery();
     }
 
+    public void UpdateHeroImagePath(int id, string? heroImagePath)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE Games SET HeroImagePath = $hero WHERE Id = $id;";
+        command.Parameters.AddWithValue("$hero", (object?)heroImagePath ?? DBNull.Value);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Adds elapsed minutes to a game's running total playtime — called once when the game exits (only reachable for a directly-tracked process, same limitation as the in-game overlay).</summary>
+    public void AddPlaytime(int id, int minutes)
+    {
+        if (minutes <= 0) return;
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE Games SET TotalPlaytimeMinutes = TotalPlaytimeMinutes + $minutes WHERE Id = $id;";
+        command.Parameters.AddWithValue("$minutes", minutes);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
     public void DeleteGame(int id)
     {
         using var connection = OpenConnection();
@@ -82,7 +126,7 @@ public sealed class GameDatabase
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Title, ExecutablePath, ArtworkPath, LaunchArgs, LastPlayedUtc FROM Games ORDER BY Title;";
+        command.CommandText = "SELECT Id, Title, ExecutablePath, ArtworkPath, LaunchArgs, LastPlayedUtc, TotalPlaytimeMinutes, HeroImagePath FROM Games ORDER BY Title;";
         using var reader = command.ExecuteReader();
 
         var games = new List<Game>();
@@ -95,7 +139,9 @@ public sealed class GameDatabase
                 ExecutablePath = reader.GetString(2),
                 ArtworkPath = reader.IsDBNull(3) ? null : reader.GetString(3),
                 LaunchArgs = reader.IsDBNull(4) ? null : reader.GetString(4),
-                LastPlayedUtc = reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5))
+                LastPlayedUtc = reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5)),
+                TotalPlaytimeMinutes = reader.GetInt32(6),
+                HeroImagePath = reader.IsDBNull(7) ? null : reader.GetString(7)
             });
         }
         return games;

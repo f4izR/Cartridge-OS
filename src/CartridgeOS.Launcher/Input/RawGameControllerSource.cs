@@ -40,6 +40,8 @@ internal static class RawGameControllerSource
         if (Held(1)) bits |= (ushort)GamepadButton.A;
         if (Held(2)) bits |= (ushort)GamepadButton.B;
         if (Held(3)) bits |= (ushort)GamepadButton.Y;
+        if (Held(4)) bits |= (ushort)GamepadButton.LeftShoulder;
+        if (Held(5)) bits |= (ushort)GamepadButton.RightShoulder;
         if (Held(8)) bits |= (ushort)GamepadButton.Back;
         if (Held(9)) bits |= (ushort)GamepadButton.Start;
 

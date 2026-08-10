@@ -11,6 +11,8 @@ public enum GamepadButton : ushort
     DPadRight = 0x0008,
     Start = 0x0010,
     Back = 0x0020,
+    LeftShoulder = 0x0100,
+    RightShoulder = 0x0200,
     A = 0x1000,
     B = 0x2000,
     X = 0x4000,
