@@ -170,3 +170,11 @@ Fullscreen launcher with controller nav, keyboard/mouse fallback, manual add-gam
 - [ ] Cloud sync — **deliberately skipped**, contradicts the README's offline/no-accounts pitch, see log
 - [ ] Plugin support — **deliberately skipped**, no plugins/contributors exist to design the API against yet, see log
 - [x] ~~Idle screen saver + music~~ — done 2026-08-11, see log. Ended up simpler than the original idea (per-game soundtrack was going to need either bundled OST files or a licensed streaming integration): a slideshow of bundled/user-chosen photos + a shuffled bundled/user-chosen music playlist, not tied to any specific game.
+
+### TO Dos
+- [ ] Overlay is mapped to wrong button which is option buttion need to be mapped to home button or also known as xbox guide button in case of playstation controllers it should be PS button
+- [ ] We also need to work on the scrolling animation as it is jerky and needs to be smoothed out the main 
+![alt text](image-4.png)
+
+- [ ] the background images of the recently played tab of games need to be animated a little like moving animation or something like that.
+- [ ] also need to do more focus on controller first navigation
