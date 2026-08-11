@@ -10,8 +10,9 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 - **Settings** — collapsible right-side panel (gear icon), Steam/NVIDIA-app-style category rail:
   - **Library tab**: Scan for Games, Find More Games (+ scan-directory picker, see below), Add Game, Remove Game, and a storage-drive picker (which fixed drive the Recently Played storage stat reads from — defaults to the system drive).
   - **Wallpaper tab**: app-wide background source (selected game's artwork vs. a custom image) + file picker.
-- Top nav bar (Home / Recently Played / Library) is a centered pill switcher — mouse click, keyboard, or gamepad L1/R1 (shoulder buttons) all work.
+- Top nav bar (Home / Recently Played / Library) is a centered pill switcher — mouse click, keyboard, or gamepad L1/R1 (shoulder buttons) all work; switching crossfades rather than cutting instantly. Settings' own Library/Wallpaper/Screen Saver tabs fade in on switch the same way.
 - Header bar: logo, nav pills, and a status area (controller/device battery, real internet-reachability indicator, live search — Library only, clock, settings/minimize/close buttons).
+- A game's artwork zooms in briefly the moment it's launched, on every screen that can launch one (Library, Home carousel, Recently Played's hero card and 2x2 grid).
 
 ## Building your library
 
@@ -46,6 +47,12 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 - **"Launching..." tile indicator** — covers a tile the moment its launch is requested, so repeated clicks on a slow (especially shell-protocol) launch don't queue multiple attempts.
 - Launcher window minimizes automatically on every launch so it doesn't sit on top of the game.
 
+## Idle screen saver
+
+- Fullscreen ambient slideshow + background music after a configurable period of no keyboard/mouse/gamepad activity — a real crossfade between shuffled photos (not a hard cut), music fades in/out through a shuffled looping playlist, and a big centered clock + date. Suppressed while a game is running.
+- Any input dismisses it — keyboard, mouse (past a small movement threshold), or gamepad.
+- Settings → Screen Saver: enable/disable, inactivity duration (preset dropdown), volume, and folder overrides for images/music (replaces the bundled defaults entirely when set, rather than mixing in) — plus a "Preview Now" button to test immediately.
+
 ## System integration
 
 - Single-instance app — a second launch just brings the existing window to the front instead of starting a duplicate.
@@ -58,4 +65,4 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 
 ## Not yet built
 
-Tracked as open checklist items rather than duplicated here — see `progress.md`'s "Phase checklist" section for the current list (custom themes, suspend/resume — deliberately skipped, cloud sync — deliberately skipped, plugin support — deliberately skipped, idle screen saver + music — not started, packaging/installer and the rest of `production-readiness.md`).
+Tracked as open checklist items rather than duplicated here — see `progress.md`'s "Phase checklist" section for the current list (custom themes, suspend/resume — deliberately skipped, cloud sync — deliberately skipped, plugin support — deliberately skipped, packaging/installer and the rest of `production-readiness.md`).

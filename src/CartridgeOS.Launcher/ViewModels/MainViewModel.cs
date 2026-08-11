@@ -102,6 +102,76 @@ public sealed class MainViewModel : ViewModelBase
     /// System Overview panel can label the stat with which drive it's actually showing.</summary>
     public string StorageDriveLabel => (SelectedStorageDrive ?? Path.GetPathRoot(Environment.SystemDirectory)!).TrimEnd('\\');
 
+    public bool ScreenSaverEnabled
+    {
+        get => _settings.ScreenSaverEnabled;
+        set
+        {
+            if (_settings.ScreenSaverEnabled == value) return;
+            _settings.ScreenSaverEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    /// <summary>Preset options for the inactivity-duration combo box — a free-text seconds/minutes field
+    /// would need its own validation for no real benefit over a handful of sensible presets.</summary>
+    public static IReadOnlyList<InactivityOption> InactivityOptions { get; } =
+    [
+        new(1, "1 minute"), new(2, "2 minutes"), new(5, "5 minutes"),
+        new(10, "10 minutes"), new(15, "15 minutes"), new(30, "30 minutes"),
+    ];
+
+    public int ScreenSaverInactivityMinutes
+    {
+        get => _settings.ScreenSaverInactivityMinutes;
+        set
+        {
+            if (_settings.ScreenSaverInactivityMinutes == value) return;
+            _settings.ScreenSaverInactivityMinutes = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    public double ScreenSaverVolume
+    {
+        get => _settings.ScreenSaverVolume;
+        set
+        {
+            if (_settings.ScreenSaverVolume == value) return;
+            _settings.ScreenSaverVolume = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    /// <summary>Null = "use the bundled Assets/ScreenSaver files" (see ScreenSaverWindow) — shown in
+    /// Settings as "Default" rather than a blank path.</summary>
+    public string? ScreenSaverImagesFolder
+    {
+        get => _settings.ScreenSaverImagesFolder;
+        set
+        {
+            if (_settings.ScreenSaverImagesFolder == value) return;
+            _settings.ScreenSaverImagesFolder = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    public string? ScreenSaverMusicFolder
+    {
+        get => _settings.ScreenSaverMusicFolder;
+        set
+        {
+            if (_settings.ScreenSaverMusicFolder == value) return;
+            _settings.ScreenSaverMusicFolder = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
     private string _sessionUptimeLabel = "";
     public string SessionUptimeLabel
     {
@@ -328,6 +398,10 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ChooseWallpaperCommand { get; }
     public ICommand ToggleSearchCommand { get; }
     public ICommand BrowseScanDirectoryCommand { get; }
+    public ICommand BrowseScreenSaverImagesCommand { get; }
+    public ICommand ClearScreenSaverImagesCommand { get; }
+    public ICommand BrowseScreenSaverMusicCommand { get; }
+    public ICommand ClearScreenSaverMusicCommand { get; }
 
     public MainViewModel()
     {
@@ -349,6 +423,10 @@ public sealed class MainViewModel : ViewModelBase
         ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
         ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
         BrowseScanDirectoryCommand = new RelayCommand(BrowseScanDirectory);
+        BrowseScreenSaverImagesCommand = new RelayCommand(() => ScreenSaverImagesFolder = BrowseForFolder("Select a folder of images for the screen saver") ?? ScreenSaverImagesFolder);
+        ClearScreenSaverImagesCommand = new RelayCommand(() => ScreenSaverImagesFolder = null);
+        BrowseScreenSaverMusicCommand = new RelayCommand(() => ScreenSaverMusicFolder = BrowseForFolder("Select a folder of music for the screen saver") ?? ScreenSaverMusicFolder);
+        ClearScreenSaverMusicCommand = new RelayCommand(() => ScreenSaverMusicFolder = null);
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
@@ -500,6 +578,13 @@ public sealed class MainViewModel : ViewModelBase
         game.MarkPlayedNow();
         _db.UpdateLastPlayed(game.Id, game.LastPlayedUtc!.Value);
         RebuildRecentGames();
+
+        // The hero card's highlight (IsContinuePlayingGameSelected) only lights up when SelectedGame
+        // matches ContinuePlayingGame — without this, RebuildRecentGames correctly moves the just-launched
+        // game's content into the hero slot, but SelectedGame keeps pointing at whatever was clicked
+        // before, so the hero shows the new game unhighlighted while the old selection's border stays lit
+        // in the 2x2 grid below it. Reads as "it didn't move to the hero card" even though it did.
+        SelectedGame = game;
     }
 
     /// <summary>Persists elapsed playtime and updates the same tile in-memory — called once a directly-tracked
@@ -678,6 +763,15 @@ public sealed class MainViewModel : ViewModelBase
         ScanDirectories.Clear();
         foreach (var dir in _settings.ScanDirectories) ScanDirectories.Add(dir);
         SelectedScanDirectory = dialog.FolderName;
+    }
+
+    /// <summary>Plain single-folder picker, no MRU list — used by the screen saver's images/music overrides
+    /// (unlike the scan-directory picker, these are a single override each, not a recall list). Returns null
+    /// on cancel so callers can `?? previousValue` and leave the setting untouched.</summary>
+    private static string? BrowseForFolder(string title)
+    {
+        var dialog = new OpenFolderDialog { Title = title };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
     /// <summary>Redecodes the Home background at full resolution for whichever game is now selected — prefers

@@ -25,7 +25,13 @@
                     <ControlTemplate TargetType="TabControl">
                         <DockPanel>
                             <TabPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20,0,0,0">
+                            <!-- x:Name reached from code-behind (SettingsPanel.xaml.cs's SelectionChanged
+                                 handler) to fade this in on every tab switch — NOT an EventTrigger on
+                                 Selector.SelectionChanged here, since several ComboBoxes inside the tab
+                                 content are Selectors too and their own selection changes bubble up through
+                                 this same routed event, crashing an EventTrigger that expects it to only ever
+                                 come from the TabControl itself. -->
+                            <ScrollViewer x:Name="ContentHost" VerticalScrollBarVisibility="Auto" Margin="20,0,0,0">
                                 <ContentPresenter ContentSource="SelectedContent" />
                             </ScrollViewer>
                         </DockPanel>
@@ -92,7 +98,8 @@
             <TextBlock DockPanel.Dock="Top" Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
                        FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
 
-            <TabControl Style="{StaticResource SettingsTabControlStyle}">
+            <TabControl x:Name="CategoryTabControl" Style="{StaticResource SettingsTabControlStyle}"
+                        SelectionChanged="CategoryTabControl_SelectionChanged">
                 <!-- One category per TabItem. Add the next one (e.g. "Interface", "Controller") the same way. -->
                 <TabItem Header="Library" Style="{StaticResource SettingsTabItemStyle}">
                     <StackPanel>
@@ -167,6 +174,56 @@
                         <TextBlock Text="{Binding CustomWallpaperPath}"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </TabItem>
+                <TabItem Header="Screen Saver" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Screen Saver" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <CheckBox Content="Enabled" IsChecked="{Binding ScreenSaverEnabled}"
+                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
+                                  Margin="0,0,0,16" Cursor="Hand" />
+
+                        <TextBlock Text="Start After" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="How long the PC needs to be idle (keyboard, mouse, and controller) before the screen saver takes over." />
+                        <ComboBox ItemsSource="{Binding InactivityOptions}"
+                                  SelectedValuePath="Minutes" DisplayMemberPath="Label"
+                                  SelectedValue="{Binding ScreenSaverInactivityMinutes}"
+                                  IsEditable="False" HorizontalAlignment="Left" MinWidth="140" Margin="0,0,0,16" />
+
+                        <TextBlock Text="Volume" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <Slider Value="{Binding ScreenSaverVolume}" Minimum="0" Maximum="1" TickFrequency="0.1"
+                                IsSnapToTickEnabled="False" Width="200" HorizontalAlignment="Left" Margin="0,0,0,16" />
+
+                        <TextBlock Text="Images" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Uses the built-in photos by default. Point at your own folder to use only those instead." />
+                        <TextBlock Text="{Binding ScreenSaverImagesFolder, TargetNullValue='Default'}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" Margin="0,0,0,6" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Button Content="Browse..." Command="{Binding BrowseScreenSaverImagesCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" />
+                            <Button Content="Use Default" Command="{Binding ClearScreenSaverImagesCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </StackPanel>
+
+                        <TextBlock Text="Music" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Uses the built-in tracks by default. Point at your own folder to use only those instead." />
+                        <TextBlock Text="{Binding ScreenSaverMusicFolder, TargetNullValue='Default'}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" Margin="0,0,0,6" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                            <Button Content="Browse..." Command="{Binding BrowseScreenSaverMusicCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" />
+                            <Button Content="Use Default" Command="{Binding ClearScreenSaverMusicCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </StackPanel>
+
+                        <Button Content="Preview Now" Click="PreviewScreenSaver_Click"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" />
                     </StackPanel>
                 </TabItem>
             </TabControl>

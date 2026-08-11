@@ -18,4 +18,14 @@ public sealed class AppSettings
     /// <summary>Which fixed drive's storage stats the Recently Played "System Overview" panel shows
     /// (e.g. "D:\"). Null means "not chosen yet — use the system drive".</summary>
     public string? StorageDriveLetter { get; set; }
+
+    public bool ScreenSaverEnabled { get; set; } = true;
+    public int ScreenSaverInactivityMinutes { get; set; } = 1;
+    public double ScreenSaverVolume { get; set; } = 0.5;
+
+    /// <summary>Folder overrides for the screen saver's slideshow/music — null means "use the bundled
+    /// Assets/ScreenSaver/{Images,Sound} files". Setting one replaces the bundled set entirely rather
+    /// than merging with it (simpler mental model: empty = defaults, set = only these).</summary>
+    public string? ScreenSaverImagesFolder { get; set; }
+    public string? ScreenSaverMusicFolder { get; set; }
 }

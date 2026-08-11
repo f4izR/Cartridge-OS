@@ -52,8 +52,16 @@
                                 </Border>
                                 <!-- Artwork as the Border's own Background (not a child Image) — Border.CornerRadius only
                                      ever clips its own background paint, never arbitrary child content, so this is what
-                                     actually gives the artwork rounded corners instead of square ones poking out. -->
-                                <Border Grid.Row="0" Margin="10" CornerRadius="6">
+                                     actually gives the artwork rounded corners instead of square ones poking out.
+                                     Its own RenderTransform (separate from the outer Tile's selection-scale one below)
+                                     is what zooms in on launch — a second independent transform, not shared, since
+                                     IsSelected and IsLaunching are very plausibly both true at once and animating the
+                                     same property from two different triggers would fight each other. -->
+                                <Border x:Name="ArtworkImage" Grid.Row="0" Margin="10" CornerRadius="6"
+                                        RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                                    <Border.RenderTransform>
+                                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                                    </Border.RenderTransform>
                                     <Border.Background>
                                         <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
                                     </Border.Background>
@@ -75,6 +83,44 @@
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- Cinematic zoom-in on the artwork the moment a launch is requested, alongside
+                                 the existing darken/"Launching..." overlay above — gives the launch a bit of
+                                 weight instead of a flat instant cut. Scales back down if IsLaunching flips
+                                 back to false (e.g. the "did this actually launch" guess timing out). -->
+                            <DataTrigger Binding="{Binding IsLaunching}" Value="True">
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1.18" Duration="0:0:0.6">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1.18" Duration="0:0:0.6">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>

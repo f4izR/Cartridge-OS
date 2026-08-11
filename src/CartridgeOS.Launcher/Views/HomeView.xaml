@@ -54,7 +54,11 @@
                     <Border Grid.Row="0" Margin="14" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
                         <TextBlock Text="🎮" FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
                     </Border>
-                    <Border Grid.Row="0" Margin="14" CornerRadius="9">
+                    <Border x:Name="ArtworkImage" Grid.Row="0" Margin="14" CornerRadius="9"
+                            RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding Game.Artwork}" Stretch="UniformToFill" />
                         </Border.Background>
@@ -73,6 +77,43 @@
                 </Grid>
             </Border>
             <DataTemplate.Triggers>
+                <!-- Zoom-in on the artwork the moment a launch is requested — same idea as Library/Recently
+                     Played's tiles, on its own RenderTransform rather than "Tile"'s, since Tile's transform
+                     is already driving the pop-in-on-Loaded animation above. -->
+                <DataTrigger Binding="{Binding Game.IsLaunching}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                 To="1.18" Duration="0:0:0.6">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                 To="1.18" Duration="0:0:0.6">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                 To="1" Duration="0:0:0.3" />
+                                <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                 Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                 To="1" Duration="0:0:0.3" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding IsCenter}" Value="True">
                     <Setter TargetName="Tile" Property="Width" Value="260" />
                     <Setter TargetName="Tile" Property="Height" Value="360" />

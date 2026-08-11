@@ -39,7 +39,11 @@
                                         Background="{StaticResource SurfaceHoverBrush}">
                                     <TextBlock Text="🎮" FontSize="34" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
                                 </Border>
-                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10">
+                                <Border x:Name="ArtworkImage" Grid.Column="0" Width="100" Height="100" CornerRadius="10"
+                                        RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                                    <Border.RenderTransform>
+                                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                                    </Border.RenderTransform>
                                     <Border.Background>
                                         <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
                                     </Border.Background>
@@ -67,6 +71,40 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Card" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsLaunching}" Value="True">
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1.18" Duration="0:0:0.6">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1.18" Duration="0:0:0.6">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1" Duration="0:0:0.3" />
+                                            <DoubleAnimation Storyboard.TargetName="ArtworkImage"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -150,10 +188,52 @@
                     <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12" Background="#22000000">
                         <TextBlock Text="🎮" FontSize="50" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
                     </Border>
-                    <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12">
+                    <Border x:Name="HeroArtworkImage" Grid.Column="0" Width="170" Height="170" CornerRadius="12"
+                            RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding ContinuePlayingGame.Artwork}" Stretch="UniformToFill" />
                         </Border.Background>
+                        <!-- No TargetName needed below — this trigger is on the same element it animates,
+                             not reaching into a ControlTemplate part like the Library/Home tiles do. -->
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ContinuePlayingGame.IsLaunching}" Value="True">
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                     To="1.18" Duration="0:0:0.6">
+                                                        <DoubleAnimation.EasingFunction>
+                                                            <CubicEase EasingMode="EaseOut" />
+                                                        </DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                     To="1.18" Duration="0:0:0.6">
+                                                        <DoubleAnimation.EasingFunction>
+                                                            <CubicEase EasingMode="EaseOut" />
+                                                        </DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        <DataTrigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                     To="1" Duration="0:0:0.3" />
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                     To="1" Duration="0:0:0.3" />
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                     </Border>
                     <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="CONTINUE PLAYING" Foreground="#D7E9FF" FontSize="12" FontWeight="Bold" Margin="0,0,0,8" />

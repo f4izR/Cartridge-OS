@@ -5,7 +5,10 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
+using CartridgeOS.Core.Data;
 using CartridgeOS.Core.Ipc;
+using CartridgeOS.Core.Models;
 using CartridgeOS.Launcher.Input;
 using CartridgeOS.Launcher.Services;
 using CartridgeOS.Launcher.ViewModels;
@@ -55,6 +58,10 @@ public partial class App : Application
     private OverlayWindow? _overlayWindow;
     private Process? _runningGameProcess;
     private string? _runningGameTitle;
+
+    private DispatcherTimer? _idleTimer;
+    private DateTime _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo (IdleDetector) never sees gamepad input, so this is tracked separately
+    private ScreenSaverWindow? _screenSaverWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -111,6 +118,12 @@ public partial class App : Application
         _singleInstancePipeCts = new CancellationTokenSource();
         _ = new CartridgeOsPipeServer(HandleSingleInstanceSignal, SingleInstancePipeName).RunAsync(_singleInstancePipeCts.Token);
 
+        // System-wide, not tied to launcher-window focus — same as a real screen saver, this fires
+        // regardless of what app currently has focus. See CheckIdle for the conditions that suppress it.
+        _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _idleTimer.Tick += (_, _) => CheckIdle();
+        _idleTimer.Start();
+
         ShowLauncher();
     }
 
@@ -123,6 +136,7 @@ public partial class App : Application
 
     private void OnGamepadAction(GamepadAction action)
     {
+        _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo never sees this — tracked separately for CheckIdle
         Dispatcher.BeginInvoke(() =>
         {
             // A modal dialog (e.g. ArtworkCropWindow) takes over entirely while it's open — its input must
@@ -142,14 +156,49 @@ public partial class App : Application
 
     private void OnRightStickMoved(float x, float y)
     {
+        _lastGamepadActivityUtc = DateTime.UtcNow;
         if (_modalGamepadTarget is { } target) Dispatcher.BeginInvoke(() => target.HandleRightStick(x, y));
         else _mouse!.Move(x, y); // pure Win32 P/Invoke, not a WPF object — safe to call straight from the poll thread, no Dispatcher needed
     }
 
     private void OnRightTriggerChanged(bool held)
     {
+        _lastGamepadActivityUtc = DateTime.UtcNow;
         if (_modalGamepadTarget is not null) return; // avoid a stray emulated click landing on the dialog underneath while it's open
         _mouse!.SetLeftButtonDown(held);
+    }
+
+    /// <summary>Ticks every 1s (see OnStartup) — suppressed entirely while the screen saver is already
+    /// showing, a game is running, or some other modal (e.g. ArtworkCropWindow) has gamepad focus.
+    /// Reloads AppSettings fresh every tick rather than caching a copy — it's a tiny JSON file, and this
+    /// sidesteps needing any change-notification plumbing between the Settings UI (which edits its own
+    /// MainViewModel-owned AppSettings instance) and this class.</summary>
+    private void CheckIdle()
+    {
+        var settings = SettingsStore.Load();
+        if (!settings.ScreenSaverEnabled) return;
+        if (_screenSaverWindow is not null) return;
+        if (_runningGameProcess is not null) return;
+        if (_modalGamepadTarget is not null) return;
+
+        var threshold = TimeSpan.FromMinutes(settings.ScreenSaverInactivityMinutes);
+        bool idle = IdleDetector.GetIdleTime() >= threshold && DateTime.UtcNow - _lastGamepadActivityUtc >= threshold;
+        if (idle) ShowScreenSaver(settings);
+    }
+
+    /// <summary>Settings → "Preview Now" — bypasses the enabled toggle and inactivity duration entirely
+    /// (testing should work even while the feature is turned off), but still won't interrupt a running game.</summary>
+    public void ShowScreenSaverNow()
+    {
+        if (_screenSaverWindow is not null || _runningGameProcess is not null) return;
+        ShowScreenSaver(SettingsStore.Load());
+    }
+
+    private void ShowScreenSaver(AppSettings settings)
+    {
+        _screenSaverWindow = new ScreenSaverWindow(settings);
+        _screenSaverWindow.Closed += (_, _) => _screenSaverWindow = null;
+        _screenSaverWindow.Show();
     }
 
     /// <summary>Keeps the overlay's on-screen button prompt matching whatever controller is actually plugged in.</summary>
@@ -264,6 +313,13 @@ public partial class App : Application
         game.IsLaunching = true;
         SoundService.PlayConfirm();
 
+        // Runs before Process.Start, not after — this is what actually updates Recently Played's hero
+        // card/order, and it should reflect the moment the user chose to launch, not be at the mercy of
+        // whether the OS call below happens to succeed. Previously ran after Process.Start with no
+        // try/catch around it, so a bad exe path (missing file, permissions) threw before this ever ran,
+        // silently leaving Recently Played stale for that launch.
+        vm.RecordPlayed(game);
+
         // WorkingDirectory must be the game's own folder, not the launcher's — otherwise games that
         // resolve assets via a relative path (e.g. ".\data\") fail to find them.
         var startInfo = new ProcessStartInfo(game.ExecutablePath)
@@ -271,8 +327,17 @@ public partial class App : Application
             UseShellExecute = true,
             WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath) ?? "",
         };
-        var process = Process.Start(startInfo);
-        vm.RecordPlayed(game);
+        Process? process;
+        try
+        {
+            process = Process.Start(startInfo);
+        }
+        catch (Exception ex) when (ex is Win32Exception or FileNotFoundException)
+        {
+            // ponytail: no launch-failure UI yet (bad path, permissions) — surfacing this properly is its
+            // own task. Treated the same as a shell launch below (no process to track) rather than crashing.
+            process = null;
+        }
 
         // Doesn't need the Process handle, so this runs even for Steam/Xbox shell launches (where
         // Process.Start returns null below) — only downside there is we can't auto-clear it on exit.
@@ -305,10 +370,27 @@ public partial class App : Application
             process.EnableRaisingEvents = true;
             process.Exited += (_, _) => Dispatcher.BeginInvoke(() =>
             {
-                // Whole minutes, not fractional — matches the "Xh Ym" display granularity, and avoids
-                // recording a few seconds of playtime for a game that failed to start and exited immediately.
-                int minutes = (int)(DateTime.UtcNow - startedAtUtc).TotalMinutes;
-                if (minutes > 0) vm.RecordPlaytime(game, minutes);
+                // Some apps (a fair few Electron/Squirrel-installed ones — Trello, Discord, Slack, VS Code)
+                // launch via a thin stub/updater .exe that spawns the real, longer-lived process and then
+                // exits itself within a second or two — so *our* tracked Process.Exited fires almost
+                // immediately even though the app the user actually cares about is still very much open.
+                // Left unguarded, that made the screen saver ignore a genuinely-still-running app (the
+                // "game running" idle-suppression check only looks at _runningGameProcess) and recorded a
+                // few seconds of bogus playtime instead of the real session. Heuristic fix: if another
+                // process sharing the same exe name is still alive, treat this as the stub exiting, not the
+                // app — keep _runningGameProcess set (still non-null is all CheckIdle/ToggleOverlay actually
+                // need) and skip recording playtime/OnGameExited for this exit. We won't get a second,
+                // accurate playtime/exit signal when the real process eventually closes — a real limitation
+                // of this heuristic, not attempted here (would need polling for the survivor's own exit).
+                string exeName = Path.GetFileNameWithoutExtension(game.ExecutablePath);
+                if (Process.GetProcessesByName(exeName).Length > 0) return;
+
+                // Rounded up, with a 1-minute floor — a real session (however short) should always show
+                // *something* rather than silently vanishing. The previous floor-and-skip-if-zero logic
+                // ((int)TotalMinutes, only recorded if > 0) meant any session under 60 real seconds recorded
+                // no playtime at all, which is exactly what a quick manual test looks like.
+                int minutes = Math.Max(1, (int)Math.Ceiling((DateTime.UtcNow - startedAtUtc).TotalMinutes));
+                vm.RecordPlaytime(game, minutes);
                 OnGameExited();
             });
         }
@@ -337,6 +419,8 @@ public partial class App : Application
     private void ExitApplication()
     {
         _singleInstancePipeCts?.Cancel();
+        _idleTimer?.Stop();
+        _screenSaverWindow?.Close();
         _gamepad?.Stop();
         _overlayHotkey?.Dispose();
         _discord?.Dispose();

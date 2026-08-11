@@ -15,6 +15,74 @@
         Topmost="True"
         Background="{StaticResource BackgroundBrush}">
 
+    <Window.Resources>
+        <!-- Crossfade between screens instead of the instant Visibility cut it used to be. All three
+             stay technically "Visible" (Opacity 0 + IsHitTestVisible False when not current) rather than
+             Collapsed, since Collapsed can't be animated — the tradeoff is the off-screen ones keep their
+             own internal timers/animations running (e.g. Recently Played's particle background), which is
+             cheap enough here (opacity/transform only, GPU-composited) not to be worth the extra
+             complexity of tearing them down and rebuilding on every switch. -->
+        <Style x:Key="HomeScreenFadeStyle" TargetType="FrameworkElement">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedScreen}" Value="Home">
+                    <Setter Property="IsHitTestVisible" Value="True" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.25" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Deliberately NOT BasedOn the style above — inheriting it would carry over its "Home" DataTrigger
+             too (triggers add, they don't replace), which would make this element also react to Home being
+             selected. Each of the three needs its own fully independent style. -->
+        <Style x:Key="RecentlyPlayedScreenFadeStyle" TargetType="FrameworkElement">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedScreen}" Value="RecentlyPlayed">
+                    <Setter Property="IsHitTestVisible" Value="True" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.25" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LibraryScreenFadeStyle" TargetType="FrameworkElement">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedScreen}" Value="Library">
+                    <Setter Property="IsHitTestVisible" Value="True" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.25" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" /></Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -189,12 +257,11 @@
                 <!-- Home: the selected game's own art fills the whole screen behind this (see the background
                      layer above — Home is the only screen where selection drives the backdrop). Details +
                      carousel anchored to the bottom, per request, rather than the top like the reference image. -->
-                <views:HomeView Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Home}" />
+                <views:HomeView Style="{StaticResource HomeScreenFadeStyle}" />
 
-                <views:RecentlyPlayedView Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=RecentlyPlayed}" />
+                <views:RecentlyPlayedView Style="{StaticResource RecentlyPlayedScreenFadeStyle}" />
 
-                <views:LibraryView x:Name="LibraryScreen"
-                                   Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}" />
+                <views:LibraryView x:Name="LibraryScreen" Style="{StaticResource LibraryScreenFadeStyle}" />
             </Grid>
         </Grid>
 
