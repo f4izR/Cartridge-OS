@@ -1,0 +1,175 @@
+<UserControl x:Class="CartridgeOS.Launcher.Views.SettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <Style x:Key="SettingsRadioStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <!-- Steam/NVIDIA-app-style settings: a fixed-width category rail on the left (TabPanel), the
+             selected category's nested settings on the right. Add more categories later by adding
+             another TabItem below — each one is a self-contained "main heading" with its own nested
+             controls, same shape as the Background category. -->
+        <Style x:Key="SettingsTabControlStyle" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <DockPanel>
+                            <TabPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20,0,0,0">
+                                <ContentPresenter ContentSource="SelectedContent" />
+                            </ScrollViewer>
+                        </DockPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="CategoryBg" CornerRadius="6" Padding="12,10" Margin="0,0,0,4">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="CategoryBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CategoryBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsSectionHeadingStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <!-- One labeled action within a settings section: bold sub-label, a one-line explanation of what it
+             does, then the control itself — same "label, then help text, then control" shape most settings
+             UIs (Windows Settings, Steam) use, rather than a bare unexplained button. -->
+        <Style x:Key="SettingsActionLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+
+        <Style x:Key="SettingsDescriptionStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
+    <Border Width="460" Padding="24"
+            Background="{StaticResource SurfaceRaisedBrush}"
+            BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}"
+            Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
+                       FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
+
+            <TabControl Style="{StaticResource SettingsTabControlStyle}">
+                <!-- One category per TabItem. Add the next one (e.g. "Interface", "Controller") the same way. -->
+                <TabItem Header="Library" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Scan &amp; Detect" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <TextBlock Text="Trusted Sources" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Looks for games already installed through Steam, Epic, GOG, Ubisoft, EA, Battle.net, and Riot." />
+                        <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Everything Else" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="A broader heuristic scan for standalone executables and Xbox/Store apps. Results need your confirmation before they're added." />
+
+                        <!-- NVIDIA-style scan-directory picker: pick a folder once, it joins the MRU combo for
+                             next time. Empty selection (no folder ever picked) falls back to the default
+                             Program-Files/drives sweep — see MainViewModel.FindMoreGamesAsync. -->
+                        <TextBlock Text="Scan Directory" Style="{StaticResource SettingsActionLabelStyle}" Margin="0,0,0,6" />
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0" ItemsSource="{Binding ScanDirectories}"
+                                      SelectedItem="{Binding SelectedScanDirectory}"
+                                      IsEditable="False" Margin="0,0,8,0" />
+                            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseScanDirectoryCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </Grid>
+                        <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Manage Games" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <TextBlock Text="Add Manually" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Pick an executable directly — useful for anything the scanners above didn't find." />
+                        <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Remove Selected" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Removes whatever game is currently selected in your library. Only removes it from Cartridge OS — the game itself isn't touched." />
+                        <Button Content="Remove Game" Command="{Binding RemoveGameCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Storage" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <TextBlock Text="Drive to Display" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Which drive's storage the Recently Played screen shows — useful if your games live on a different drive than Windows." />
+                        <ComboBox ItemsSource="{Binding StorageDrives}"
+                                  SelectedItem="{Binding SelectedStorageDrive}"
+                                  IsEditable="False" HorizontalAlignment="Left" MinWidth="160" />
+                    </StackPanel>
+                </TabItem>
+                <TabItem Header="Wallpaper" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Background" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <RadioButton Content="Selected game's artwork" GroupName="WallpaperMode"
+                                     Style="{StaticResource SettingsRadioStyle}"
+                                     IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelectedGameArtwork}" />
+                        <RadioButton Content="Custom image" GroupName="WallpaperMode"
+                                     Style="{StaticResource SettingsRadioStyle}"
+                                     IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=CustomImage}" />
+
+                        <Button Content="Browse..." Command="{Binding ChooseWallpaperCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HorizontalAlignment="Left" Margin="0,4,0,6" />
+                        <TextBlock Text="{Binding CustomWallpaperPath}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Border>
+</UserControl>

@@ -1,7 +1,6 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Input;
 using CartridgeOS.Launcher.Input;
@@ -19,9 +18,6 @@ public partial class MainWindow : Window
 {
     // Must match the tile Width + 2*Margin set in the ItemContainerStyle in MainWindow.xaml.
     private const double TileFootprintWidth = 220 + 2 * 12;
-
-    // Must match HomeCarouselTileStyle's Border Width + 2*Margin in MainWindow.xaml.
-    private const double HomeTileFootprintWidth = 240 + 2 * 14;
 
     // Home's background is crisp/unblurred now (no dimming) — full opacity crossfade.
     private const double BackgroundArtOpacity = 1.0;
@@ -61,8 +57,13 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             // Windows' foreground-lock can leave a debugger-launched window without keyboard focus. Force it.
+            // Focus the Window itself, not a specific screen's control (this used to always call
+            // GameGrid.Focus() — broken as soon as Home became the default screen instead of Library, since
+            // the Library grid sits Collapsed there and WPF silently refuses to focus a collapsed element,
+            // leaving nothing focused at all. All nav is handled explicitly via PreviewKeyDown below
+            // regardless of which control has focus, so the Window itself is a focus target that's always valid.
             Activate();
-            GameGrid.Focus();
+            Focus();
         };
         Closed += (_, _) =>
         {
@@ -102,7 +103,7 @@ public partial class MainWindow : Window
         // since none of those depend on which grid is on screen.
         if (vm.SelectedScreen == AppScreen.Library && visibleGames.Count > 0)
         {
-            int columns = Math.Max(1, (int)(GameGrid.ActualWidth / TileFootprintWidth));
+            int columns = Math.Max(1, (int)(LibraryScreen.GameGrid.ActualWidth / TileFootprintWidth));
             int index = vm.SelectedGame is null ? 0 : visibleGames.IndexOf(vm.SelectedGame);
             if (index < 0) index = 0; // selected game got filtered out from under us
 
@@ -119,7 +120,7 @@ public partial class MainWindow : Window
             if (index != previousIndex) SoundService.PlayNavigate();
 
             vm.SelectedGame = visibleGames[index];
-            GameGrid.ScrollIntoView(vm.SelectedGame);
+            LibraryScreen.GameGrid.ScrollIntoView(vm.SelectedGame);
         }
         else if (vm.SelectedScreen == AppScreen.RecentlyPlayed)
         {
@@ -139,7 +140,7 @@ public partial class MainWindow : Window
             int newIndex = (index + step + visibleGames.Count) % visibleGames.Count;
 
             if (newIndex != index) SoundService.PlayNavigate();
-            vm.SelectedGame = visibleGames[newIndex]; // centering itself happens in HomeCarousel_SelectionChanged, fired by this assignment
+            vm.SelectedGame = visibleGames[newIndex];
         }
 
         if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);
@@ -203,49 +204,10 @@ public partial class MainWindow : Window
     private void OpenGameContextMenu(MainViewModel vm)
     {
         if (vm.SelectedGame is null) return;
-        if (GameGrid.ItemContainerGenerator.ContainerFromItem(vm.SelectedGame) is not ListBoxItem { ContextMenu: { } menu } container) return;
+        if (LibraryScreen.GameGrid.ItemContainerGenerator.ContainerFromItem(vm.SelectedGame) is not ListBoxItem { ContextMenu: { } menu } container) return;
 
         menu.PlacementTarget = container;
         menu.IsOpen = true;
-    }
-
-    /// <summary>Right-click doesn't move ListBox selection on its own — select the tile under the cursor first so the
-    /// context menu it's about to open (Change Wallpaper / Delete Game) always acts on the game actually clicked.</summary>
-    private void GameTile_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (((FrameworkElement)sender).DataContext is GameTileViewModel tile)
-            ((MainViewModel)DataContext).SelectedGame = tile;
-    }
-
-    private void ChangeWallpaper_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        if (vm.ChangeArtworkCommand.CanExecute(null)) vm.ChangeArtworkCommand.Execute(null);
-    }
-
-    /// <summary>Enables/disables "Revert to Previous Artwork" for whatever game the menu is about to show for — covers
-    /// both trigger paths (right-click sets PlacementTarget natively, OpenGameContextMenu sets it explicitly).</summary>
-    private void GameTileContextMenu_Opened(object sender, RoutedEventArgs e)
-    {
-        var menu = (ContextMenu)sender;
-        var tile = (menu.PlacementTarget as FrameworkElement)?.DataContext as GameTileViewModel;
-        // Tag-based lookup, not FindName: a MenuItem declared inside a Window.Resources object graph (as
-        // opposed to a ControlTemplate) isn't registered in any NameScope FindName can resolve at runtime —
-        // that's why this was silently a no-op before. menu.Items enumeration works regardless of naming.
-        var revertItem = menu.Items.OfType<MenuItem>().FirstOrDefault(mi => Equals(mi.Tag, "RevertArtwork"));
-        if (revertItem is not null) revertItem.IsEnabled = tile?.HasPreviousArtwork ?? false;
-    }
-
-    private void RevertArtwork_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        if (vm.RevertArtworkCommand.CanExecute(null)) vm.RevertArtworkCommand.Execute(null);
-    }
-
-    private void DeleteGame_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        if (vm.RemoveGameCommand.CanExecute(null)) vm.RemoveGameCommand.Execute(null);
     }
 
     /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>
@@ -255,67 +217,9 @@ public partial class MainWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void RecentGame_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        LaunchSelected(vm, vm.SelectedGame);
-    }
-
-    /// <summary>Keeps the selected carousel tile centered in the viewport (not just scrolled into view at
-    /// whichever edge it happens to enter from) — covers every way selection can change here: keyboard/
-    /// gamepad Left-Right, mouse click, and double-click-to-launch (which selects first).</summary>
-    private void HomeCarousel_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (((MainViewModel)DataContext).SelectedGame is not { } game) return;
-
-        int index = HomeCarousel.Items.IndexOf(game);
-        if (index < 0) return;
-        if (FindDescendant<ScrollViewer>(HomeCarousel) is not { } scrollViewer) return;
-
-        double itemCenter = index * HomeTileFootprintWidth + HomeTileFootprintWidth / 2;
-        double targetOffset = itemCenter - scrollViewer.ViewportWidth / 2;
-        scrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetOffset));
-    }
-
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match) return match;
-            if (FindDescendant<T>(child) is { } found) return found;
-        }
-        return null;
-    }
-
-    private void ContinuePlaying_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        LaunchSelected(vm, vm.ContinuePlayingGame);
-    }
-
-    private void HomePlay_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        LaunchSelected(vm, vm.SelectedGame);
-    }
-
-    /// <summary>Clicking anywhere on the hero card selects it (lighting up its gradient background via
-    /// IsContinuePlayingGameSelected) without launching — the Play button/double-click still do that.</summary>
-    private void ContinuePlayingCard_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        vm.SelectedGame = vm.ContinuePlayingGame;
-    }
-
-    private static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
+    internal static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
     {
         if (game is null) return;
         ((App)Application.Current).LaunchGame(vm, game);
-    }
-
-    private void GameGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-
     }
 }

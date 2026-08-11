@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Data;
@@ -24,15 +25,25 @@ namespace CartridgeOS.Launcher.ViewModels;
 public sealed class MainViewModel : ViewModelBase
 {
     private const int MaxRecentGames = 10;
+    private const int MaxScanDirectories = 5; // MRU cap for "Find More Games" scan directories
     private const int BackgroundDecodeWidth = 1920; // full-screen backdrop, not a tile — decode much wider than GameTileViewModel's 200px
     private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(15); // ponytail: hardcoded until there's a settings screen to make it configurable
     private static readonly DateTime ProcessStartTime = Process.GetCurrentProcess().StartTime; // "session" = this app run, not this particular window instance (which can be destroyed/recreated)
+
+    // Windows' own connectivity-check endpoint (what the system tray Wi-Fi flyout itself uses under the hood) —
+    // NetworkInterface.GetIsNetworkAvailable() only proves an adapter is up, not that it can actually reach the
+    // internet (e.g. still associated to a router whose own WAN/ISP link is down), so IsOnline needs a real probe.
+    private const string ConnectivityProbeUrl = "http://www.msftconnecttest.com/connecttest.txt";
+    private static readonly TimeSpan ConnectivityProbeInterval = TimeSpan.FromSeconds(5);
+    private static readonly HttpClient ConnectivityHttpClient = new() { Timeout = TimeSpan.FromSeconds(3) };
 
     private readonly GameDatabase _db;
     private readonly AppSettings _settings = SettingsStore.Load();
     private readonly DispatcherTimer _rescanTimer;
     private readonly DispatcherTimer _statusTimer;
+    private readonly DispatcherTimer _connectivityTimer;
     private readonly Dispatcher _dispatcher;
+    private bool _isInternetReachable = true; // last real probe result — refined every ConnectivityProbeInterval, see ProbeConnectivityAsync
 
     public ObservableCollection<GameTileViewModel> Games { get; } = [];
     public ObservableCollection<GameTileViewModel> RecentGames { get; } = [];
@@ -48,7 +59,7 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     private double _storageUsedPercent;
-    /// <summary>Percent used on the system drive — not per-drive-the-library-lives-on, just a general "how full is this PC" figure.</summary>
+    /// <summary>Percent used on whichever drive SelectedStorageDrive points at (system drive by default).</summary>
     public double StorageUsedPercent
     {
         get => _storageUsedPercent;
@@ -69,6 +80,28 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _storageFreeLabel, value);
     }
 
+    /// <summary>Every ready fixed drive on this PC (e.g. "C:\", "D:\") — what the Settings storage-drive combo box binds to.</summary>
+    public ObservableCollection<string> StorageDrives { get; } = [];
+
+    private string? _selectedStorageDrive;
+    /// <summary>Which drive RefreshStorageStats reads. Persisted; null (nothing chosen yet) falls back to the system drive.</summary>
+    public string? SelectedStorageDrive
+    {
+        get => _selectedStorageDrive;
+        set
+        {
+            if (!SetProperty(ref _selectedStorageDrive, value)) return;
+            OnPropertyChanged(nameof(StorageDriveLabel));
+            _settings.StorageDriveLetter = value;
+            SettingsStore.Save(_settings);
+            RefreshStorageStats();
+        }
+    }
+
+    /// <summary>Drive letter without the trailing backslash (e.g. "D:" from "D:\") — so the Recently Played
+    /// System Overview panel can label the stat with which drive it's actually showing.</summary>
+    public string StorageDriveLabel => (SelectedStorageDrive ?? Path.GetPathRoot(Environment.SystemDirectory)!).TrimEnd('\\');
+
     private string _sessionUptimeLabel = "";
     public string SessionUptimeLabel
     {
@@ -84,7 +117,41 @@ public sealed class MainViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedGame, value)) return;
             OnPropertyChanged(nameof(IsContinuePlayingGameSelected));
+            OnPropertyChanged(nameof(HomeCarouselSlots));
             _ = RefreshHomeBackgroundAsync();
+        }
+    }
+
+    // How many tiles show on each side of the center one — 3+3+1 = 7 visible. Bump this for a wider
+    // carousel; ComputeHomeCarouselSlots automatically shrinks it for a library smaller than that.
+    private const int HomeCarouselSideCount = 3;
+
+    /// <summary>
+    /// The Home carousel's visible tiles, computed directly from SelectedGame's index — center slot is the
+    /// selected game, the rest wrap around it (modulo, matching the "infinite" Left/Right nav). Deliberately
+    /// not a ListBox.SelectedItem/ScrollViewer-driven carousel: that kept silently breaking (visual-tree
+    /// timing for finding the internal ScrollViewer, IsSelected trigger not visibly updating) because a
+    /// Selector control isn't really built for "resize and re-center the item as you move" — this sidesteps
+    /// the whole class of bug by just recomputing plain data and letting the ItemsControl re-render it.
+    /// </summary>
+    public IReadOnlyList<HomeCarouselSlot> HomeCarouselSlots
+    {
+        get
+        {
+            var games = GamesView.Cast<GameTileViewModel>().ToList();
+            if (games.Count == 0) return [];
+
+            int centerIndex = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
+            if (centerIndex < 0) centerIndex = 0;
+
+            int side = Math.Min(HomeCarouselSideCount, (games.Count - 1) / 2); // don't show the same game twice when the library is small
+            var slots = new List<HomeCarouselSlot>();
+            for (int offset = -side; offset <= side; offset++)
+            {
+                int index = ((centerIndex + offset) % games.Count + games.Count) % games.Count;
+                slots.Add(new HomeCarouselSlot(games[index], offset == 0));
+            }
+            return slots;
         }
     }
 
@@ -103,6 +170,10 @@ public sealed class MainViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedScreen, value)) return;
             OnPropertyChanged(nameof(IsHomeScreen));
+            // Search is only visible on Library (see MainWindow.xaml's search pill) — clear it on leaving,
+            // so it can't keep silently filtering Home's carousel / Recently Played's nav list (both walk
+            // GamesView too) with no visible search box left to explain why.
+            if (value != AppScreen.Library) IsSearchOpen = false;
         }
     }
 
@@ -209,6 +280,21 @@ public sealed class MainViewModel : ViewModelBase
 
     public string? CustomWallpaperPath => _settings.CustomWallpaperPath;
 
+    /// <summary>MRU list of directories previously picked for "Find More Games" (NVIDIA-style — most-recent-first,
+    /// capped at MaxScanDirectories). Backed by AppSettings.ScanDirectories; this ObservableCollection is what the
+    /// Settings combo box actually binds to.</summary>
+    public ObservableCollection<string> ScanDirectories { get; } = [];
+
+    private string? _selectedScanDirectory;
+    /// <summary>Which of ScanDirectories (if any) "Find More Games" should scan instead of the default
+    /// Program-Files/drives sweep. Not persisted itself — only the MRU list is; this just remembers the
+    /// current pick for as long as the app is open.</summary>
+    public string? SelectedScanDirectory
+    {
+        get => _selectedScanDirectory;
+        set => SetProperty(ref _selectedScanDirectory, value);
+    }
+
     private ImageSource? _customWallpaperImage;
     public ImageSource? CustomWallpaperImage
     {
@@ -241,6 +327,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ToggleSettingsCommand { get; }
     public ICommand ChooseWallpaperCommand { get; }
     public ICommand ToggleSearchCommand { get; }
+    public ICommand BrowseScanDirectoryCommand { get; }
 
     public MainViewModel()
     {
@@ -261,12 +348,34 @@ public sealed class MainViewModel : ViewModelBase
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
         ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
+        BrowseScanDirectoryCommand = new RelayCommand(BrowseScanDirectory);
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
+        GamesView.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HomeCarouselSlots)); // covers search-filter changes, scan results, add/remove — anything that changes what's visible or its order
 
         if (!string.IsNullOrEmpty(_settings.CustomWallpaperPath))
             _ = LoadCustomWallpaperAsync(_settings.CustomWallpaperPath);
+
+        if (_settings.ScanDirectories.Count == 0)
+        {
+            // Every install has these — seed the MRU so first-time users see a couple of ready-to-use
+            // entries instead of an empty combo box, rather than requiring a Browse... click before
+            // "Find More Games" can be pointed anywhere.
+            _settings.ScanDirectories.AddRange(DefaultScanDirectories().Distinct(StringComparer.OrdinalIgnoreCase));
+            SettingsStore.Save(_settings);
+        }
+        foreach (var dir in _settings.ScanDirectories) ScanDirectories.Add(dir);
+        SelectedScanDirectory = ScanDirectories.FirstOrDefault();
+
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
+            StorageDrives.Add(drive.RootDirectory.FullName);
+        // Explicitly select the system drive when nothing's been chosen yet, rather than leaving this null —
+        // null is the correct internal "not chosen" state for RefreshStorageStats' fallback, but a null
+        // SelectedItem just shows the combo box empty even though the system drive is what's actually
+        // being shown, which read as "nothing selected" even though storage stats were displaying fine.
+        string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)!;
+        SelectedStorageDrive = _settings.StorageDriveLetter is { } saved && StorageDrives.Contains(saved) ? saved : systemDrive;
 
         SeedIfEmpty(_db); // ponytail: placeholder titles (some with fake play history) until the game scanner (V2) exists, delete this once real games populate the db
 
@@ -286,8 +395,12 @@ public sealed class MainViewModel : ViewModelBase
         _rescanTimer.Tick += async (_, _) => { await RescanInBackgroundAsync(); RefreshStorageStats(); };
         _rescanTimer.Start();
 
-        IsOnline = NetworkInterface.GetIsNetworkAvailable();
         NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+
+        _connectivityTimer = new DispatcherTimer { Interval = ConnectivityProbeInterval };
+        _connectivityTimer.Tick += (_, _) => _ = ProbeConnectivityAsync();
+        _connectivityTimer.Start();
+        _ = ProbeConnectivityAsync();
 
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _statusTimer.Tick += (_, _) => UpdateClock();
@@ -298,18 +411,51 @@ public sealed class MainViewModel : ViewModelBase
 
     public void StopBackgroundRescanning() => _rescanTimer.Stop();
 
-    /// <summary>Stops the clock tick and unsubscribes the network-change listener — must run when the window closes, same reason as <see cref="StopBackgroundRescanning"/>.</summary>
+    /// <summary>Stops the clock/connectivity ticks and unsubscribes the network-change listener — must run when the window closes, same reason as <see cref="StopBackgroundRescanning"/>.</summary>
     public void StopStatusUpdates()
     {
         _statusTimer.Stop();
+        _connectivityTimer.Stop();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
     }
 
     private bool FilterGame(object obj) =>
         string.IsNullOrWhiteSpace(SearchText) || ((GameTileViewModel)obj).Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>An adapter-state change is a good hint to re-probe sooner rather than wait out the full
+    /// ConnectivityProbeInterval — but the event's own IsAvailable flag isn't trusted directly (see
+    /// ConnectivityProbeUrl's comment above), so this just re-checks the adapter and kicks a fresh probe.</summary>
     private void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e) =>
-        _dispatcher.BeginInvoke(() => IsOnline = e.IsAvailable);
+        _dispatcher.BeginInvoke(() =>
+        {
+            RefreshConnectivityDisplay();
+            _ = ProbeConnectivityAsync();
+        });
+
+    /// <summary>Real internet-reachability probe, not just an adapter-up check — GetIsNetworkAvailable() alone
+    /// stays true if the adapter is still associated to a router that's itself lost its WAN/ISP connection.</summary>
+    private async Task ProbeConnectivityAsync()
+    {
+        bool reachable;
+        try
+        {
+            using var response = await ConnectivityHttpClient.GetAsync(ConnectivityProbeUrl).ConfigureAwait(false);
+            reachable = response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            reachable = false;
+        }
+
+        _ = _dispatcher.BeginInvoke(() =>
+        {
+            _isInternetReachable = reachable;
+            RefreshConnectivityDisplay();
+        });
+    }
+
+    private void RefreshConnectivityDisplay() =>
+        IsOnline = NetworkInterface.GetIsNetworkAvailable() && _isInternetReachable;
 
     private void UpdateClock()
     {
@@ -317,6 +463,7 @@ public sealed class MainViewModel : ViewModelBase
         CurrentTimeText = $"{now:hh:mm} {(now.Hour < 12 ? "am" : "pm")}";
         CurrentDateText = now.ToString("ddd, d MMM", CultureInfo.InvariantCulture).ToUpperInvariant();
         RefreshBatteryDisplay(); // piggyback on the 1s tick to keep the device-battery fallback fresh too
+        RefreshConnectivityDisplay(); // cheap (local adapter check + cached probe result), fine to run every tick
 
         var uptime = now - ProcessStartTime;
         SessionUptimeLabel = uptime.TotalHours >= 1 ? $"{(int)uptime.TotalHours}h {uptime.Minutes}m" : $"{uptime.Minutes}m";
@@ -328,7 +475,8 @@ public sealed class MainViewModel : ViewModelBase
     {
         try
         {
-            var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory)!);
+            string root = SelectedStorageDrive ?? Path.GetPathRoot(Environment.SystemDirectory)!;
+            var drive = new DriveInfo(root);
             long usedBytes = drive.TotalSize - drive.AvailableFreeSpace;
             StorageUsedPercent = drive.TotalSize > 0 ? 100.0 * usedBytes / drive.TotalSize : 0;
             StorageUsedLabel = $"{usedBytes / 1_073_741_824.0:N0} GB used";
@@ -503,6 +651,35 @@ public sealed class MainViewModel : ViewModelBase
     private async Task LoadCustomWallpaperAsync(string path) =>
         CustomWallpaperImage = await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
 
+    /// <summary>Program Files (and x86) — present on every Windows install, so these seed the scan-directory
+    /// MRU list before the user has ever browsed for one themselves. Skips a path that doesn't exist (some
+    /// installs genuinely lack the x86 one) rather than adding a dead combo-box entry.</summary>
+    private static IEnumerable<string> DefaultScanDirectories()
+    {
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (Directory.Exists(programFiles)) yield return programFiles;
+        if (Directory.Exists(programFilesX86)) yield return programFilesX86;
+    }
+
+    /// <summary>NVIDIA-style "add a directory to scan": browse once, and it joins the MRU combo box for next
+    /// time — same idea as ChooseWallpaperAsync's file picker, just for a folder and a list instead of one path.</summary>
+    private void BrowseScanDirectory()
+    {
+        var dialog = new OpenFolderDialog { Title = "Select a folder to scan for games" };
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.ScanDirectories.RemoveAll(d => string.Equals(d, dialog.FolderName, StringComparison.OrdinalIgnoreCase));
+        _settings.ScanDirectories.Insert(0, dialog.FolderName);
+        if (_settings.ScanDirectories.Count > MaxScanDirectories)
+            _settings.ScanDirectories.RemoveRange(MaxScanDirectories, _settings.ScanDirectories.Count - MaxScanDirectories);
+        SettingsStore.Save(_settings);
+
+        ScanDirectories.Clear();
+        foreach (var dir in _settings.ScanDirectories) ScanDirectories.Add(dir);
+        SelectedScanDirectory = dialog.FolderName;
+    }
+
     /// <summary>Redecodes the Home background at full resolution for whichever game is now selected — prefers
     /// the wide hero image once one's been fetched, falls back to a high-res decode of the portrait boxart in
     /// the meantime (or permanently, if no hero is ever found). Also kicks off a lazy hero fetch the first
@@ -555,10 +732,20 @@ public sealed class MainViewModel : ViewModelBase
     private async Task FindMoreGamesAsync()
     {
         var existingExePaths = new HashSet<string>(Games.Select(g => g.ExecutablePath), StringComparer.OrdinalIgnoreCase);
-        var candidates = await Task.Run(() => new StandaloneExecutableScanner().Scan()
-            .Concat(new XboxScanner().Scan())
-            .Where(g => !existingExePaths.Contains(g.ExecutablePath))
-            .ToList());
+        // A picked directory (SelectedScanDirectory) replaces the default Program-Files/drives sweep entirely —
+        // once you're pointing it at where your games actually live, scanning C:\Program Files too is just noise.
+        // XboxScanner is unaffected either way; it queries installed packages, not a filesystem path.
+        var directoryToScan = SelectedScanDirectory;
+        var candidates = await Task.Run(() =>
+        {
+            var standalone = directoryToScan is null
+                ? new StandaloneExecutableScanner().Scan()
+                : new StandaloneExecutableScanner().Scan([directoryToScan]);
+            return standalone
+                .Concat(new XboxScanner().Scan())
+                .Where(g => !existingExePaths.Contains(g.ExecutablePath))
+                .ToList();
+        });
 
         if (candidates.Count == 0)
         {

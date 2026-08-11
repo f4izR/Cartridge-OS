@@ -1,0 +1,130 @@
+<UserControl x:Class="CartridgeOS.Launcher.Views.HomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <!-- Home carousel tile: plain DataTemplate over MainViewModel.HomeCarouselSlots, not a
+             ListBoxItem/Selector style — center-vs-side sizing is driven directly by HomeCarouselSlot.IsCenter
+             via the DataTriggers below, with no dependency on Selector.IsSelected or a ScrollViewer at all. -->
+        <DataTemplate x:Key="HomeCarouselItemTemplate">
+            <!-- Every slot's container is freshly created on each nav step (HomeCarouselSlots returns a new
+                 list each time, not an incremental move), so there's no single continuous element to slide —
+                 this pop-in (scale + fade from Loaded) is what stands in for that, so the row settling into
+                 its new sizes doesn't read as an instant, rigid snap. -->
+            <Border x:Name="Tile" Margin="10" CornerRadius="12"
+                    Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderThickness="3" Cursor="Hand"
+                    MouseLeftButtonUp="HomeCarouselTile_Click"
+                    RenderTransformOrigin="0.5,0.5">
+                <Border.BorderBrush>
+                    <SolidColorBrush Color="Transparent" />
+                </Border.BorderBrush>
+                <Border.RenderTransform>
+                    <ScaleTransform ScaleX="0.7" ScaleY="0.7" />
+                </Border.RenderTransform>
+                <Border.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                 To="1" Duration="0:0:0.4">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                 To="1" Duration="0:0:0.4">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.4" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Border.Triggers>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Margin="14" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
+                        <TextBlock Text="🎮" FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                    </Border>
+                    <Border Grid.Row="0" Margin="14" CornerRadius="9">
+                        <Border.Background>
+                            <ImageBrush ImageSource="{Binding Game.Artwork}" Stretch="UniformToFill" />
+                        </Border.Background>
+                    </Border>
+                    <TextBlock x:Name="TitleText" Grid.Row="1" Text="{Binding Game.Title}"
+                               Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"
+                               Margin="14,0,14,14" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               HorizontalAlignment="Center" TextAlignment="Center" />
+
+                    <Border Grid.RowSpan="2" CornerRadius="12" Background="#B0000000"
+                            Visibility="{Binding Game.IsLaunching, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCenter}" Value="True">
+                    <Setter TargetName="Tile" Property="Width" Value="260" />
+                    <Setter TargetName="Tile" Property="Height" Value="360" />
+                    <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                    <Setter TargetName="TitleText" Property="FontSize" Value="18" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCenter}" Value="False">
+                    <Setter TargetName="Tile" Property="Width" Value="190" />
+                    <Setter TargetName="Tile" Property="Height" Value="264" />
+                    <Setter TargetName="TitleText" Property="FontSize" Value="14" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Home: the selected game's own art fills the whole screen behind this (see MainWindow's background
+         layer — Home is the only screen where selection drives the backdrop). Details + carousel anchored
+         to the bottom, per request, rather than the top like the reference image. -->
+    <Grid Margin="40,0,40,32" VerticalAlignment="Bottom">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- PS5-style big title. Margin bottom is the "spacing between game name and tiles" knob. -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,44">
+            <TextBlock Text="{Binding SelectedGame.Title}" Foreground="White" FontSize="56" FontWeight="Bold"
+                       TextWrapping="Wrap" Margin="0,0,0,14" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                <TextBlock Text="{Binding SelectedGame.LastPlayedLabel}" Foreground="#D7E9FF" FontSize="14" Margin="0,0,20,0" />
+                <TextBlock Text="{Binding SelectedGame.PlaytimeLabel}" Foreground="#D7E9FF" FontSize="14" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource PlayCircleButtonStyle}" Content="&#xE768;"
+                        Click="HomePlay_Click" Margin="0,0,14,0" />
+                <TextBlock Text="Press A to Play" Foreground="White" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Carousel — PS5-style: a fixed window of slots computed from the selected index
+             (MainViewModel.HomeCarouselSlots), center one bigger. Left/Right (MainWindow.HandleGamepadAction)
+             just changes SelectedGame; the slot list recomputes and this re-renders — no
+             Selector/ScrollViewer centering to keep in sync, which is what kept breaking. -->
+        <ItemsControl Grid.Row="1"
+                      ItemsSource="{Binding HomeCarouselSlots}"
+                      ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
+                      HorizontalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+    </Grid>
+</UserControl>

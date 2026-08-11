@@ -8,6 +8,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Theme.xaml" />
+                <ResourceDictionary Source="Styles/SharedStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <tb:TaskbarIcon x:Key="TrayIcon"

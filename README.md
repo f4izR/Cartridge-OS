@@ -5,6 +5,8 @@ Turn your Windows gaming PC into a true console experience — controller-first,
 
 Inspired by Steam Big Picture, SteamOS, Playnite, LaunchBox, and the Xbox/PlayStation dashboards — but built to go further with native OS-level integration.
 
+See `features.md` for a full, current-state feature list (this section below is the pitch, not necessarily up to the minute).
+
 ---
 
 ## ✨ Core Features
@@ -61,25 +63,33 @@ The launcher window opens fullscreen, borderless, and always-on-top — that's i
 
 ### Building your library
 
-Three ways to add games, all in the header bar:
+Three ways to add games, all in **Settings → Library** (gear icon, top-right):
 
 - **Scan for Games** — checks Steam, Epic, Riot, GOG, Ubisoft Connect, EA App, and Battle.net for anything installed, and adds it automatically. Safe to click any time; it skips launchers you don't have and games already in your library. It also re-runs on its own every 15 minutes, so newly-installed games show up without you doing anything.
-- **Find More Games** — looks for games *not* tied to any launcher: standalone/DRM-free installs and Xbox app/PC Game Pass/Microsoft Store titles. Because this is a best-effort guess rather than a certainty, it shows you a checklist first — everything starts **unchecked**, so tick only what's actually a game, use **Select All**/**Unselect All** if that's faster, then **Add Selected**.
-- **+ Add Game** — pick an executable (and optionally artwork) yourself, for anything the scanners miss entirely.
+- **Find More Games** — looks for games *not* tied to any launcher: standalone/DRM-free installs and Xbox app/PC Game Pass/Microsoft Store titles. By default it sweeps Program Files across every drive; the **Scan Directory** picker above the button lets you point it at a specific folder instead (an NVIDIA-style combo box of your last 5 picks, plus Browse...). Because this is a best-effort guess rather than a certainty, it shows you a checklist first — everything starts **unchecked**, so tick only what's actually a game, use **Select All**/**Unselect All** if that's faster, then **Add Selected**.
+- **Add Game** — pick an executable (and optionally artwork) yourself, for anything the scanners miss entirely.
+
+### Screens
+
+Three screens, switchable via the top-center nav pill (mouse click, or gamepad L1/R1):
+
+- **Home** — the default screen. Selected game's own artwork fills the background; an infinite PS5-style carousel at the bottom lets you browse and launch.
+- **Recently Played** — a "Continue Playing" card for the last game you played, a 2x2 grid of the next 4, and a System Overview panel (games installed, storage used, session uptime).
+- **Library** — the full, searchable grid of everything in your collection.
 
 ### Navigating
 
 | Action | Controller | Keyboard | Mouse |
 |---|---|---|---|
-| Move around the grid | D-pad / left stick | Arrow keys | Click a tile |
-| Launch the selected game | A | Enter / Space | Double-click |
-| Add a game | Y | Insert | Click "+ Add Game" |
+| Move around a screen | D-pad / left stick | Arrow keys | Click a tile |
+| Switch Home / Recently Played / Library | L1 / R1 | — | Click the nav pill |
+| Launch the selected game | A | Enter / Space | Double-click / Play button |
+| Add a game | Y | Insert | Settings → Add Game |
+| Per-game menu (change wallpaper, revert, delete) | Menu/Start/Options | Apps key | Right-click a tile |
 | Move the cursor | Right stick | — | — |
 | Click | Right trigger | — | Left mouse button |
-| Toggle overlay | Start | Ctrl+Shift+O | — |
+| Toggle overlay | Start (while a game is running) | Ctrl+Shift+O | — |
 | Minimize / close launcher | — | Alt+F4 (closes) | Header buttons (top-right) |
-
-The **Recent** row (above the main grid, only shown once you've launched something) is the fastest way back into whatever you played last — double-click or navigate to a tile there and press A/Enter, same as the main grid.
 
 ### The tray icon
 

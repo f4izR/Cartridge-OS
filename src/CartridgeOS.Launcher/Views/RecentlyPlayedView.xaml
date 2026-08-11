@@ -1,0 +1,254 @@
+<UserControl x:Class="CartridgeOS.Launcher.Views.RecentlyPlayedView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <conv:EqualsMultiConverter x:Key="EqualsMultiConverter" />
+
+        <!-- Recently Played's small-tile rows: bigger artwork than the vertical poster tiles elsewhere
+             (per explicit request), title + playtime, chevron — a horizontal card, not a poster. -->
+        <Style x:Key="RecentRowStyle" TargetType="ListBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <!-- Selection here is driven by comparing this item to MainViewModel.SelectedGame directly
+                 (DataTrigger below), not the ListBox's own SelectedItem/IsSelected — that two-way binding
+                 kept fighting external changes to SelectedGame (e.g. clicking the hero card set SelectedGame
+                 to a game that isn't even in this list, but the ListBox's own selection state didn't budge,
+                 so the border stayed on whatever this ListBox last selected). MouseLeftButtonUp sets
+                 SelectedGame explicitly instead, same pattern HomeCarouselItemTemplate already uses. -->
+            <EventSetter Event="MouseLeftButtonUp" Handler="RecentTile_Click" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <!-- Card min-height and the artwork square below (RecentArtworkSize) are the two knobs that
+                             control this row's overall size — bump RecentArtworkSize for bigger art, MinHeight to
+                             match (art + 2x Padding, so it isn't cropped/squeezed). -->
+                        <Border x:Name="Card" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="10" Padding="16" MinHeight="132"
+                                BorderThickness="3" BorderBrush="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10"
+                                        Background="{StaticResource SurfaceHoverBrush}">
+                                    <TextBlock Text="🎮" FontSize="34" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                                </Border>
+                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="16,0,10,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding PlaytimeLabel}" Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="13" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Converter="{StaticResource EqualsMultiConverter}">
+                                        <Binding />
+                                        <Binding Path="DataContext.SelectedGame" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SystemOverviewIconStyle" TargetType="Border">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style x:Key="SystemOverviewLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <Style x:Key="SystemOverviewValueStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid ClipToBounds="True">
+        <!-- Ambient drifting-dot background, spawned/animated in code-behind (ParticleCanvas_Loaded) —
+             purely decorative, sits behind everything else so it never interferes with hit-testing. -->
+        <Canvas x:Name="ParticleCanvas" IsHitTestVisible="False" Loaded="ParticleCanvas_Loaded" SizeChanged="ParticleCanvas_SizeChanged" />
+
+        <Grid Margin="24">
+            <TextBlock Text="No games played yet — your recently played games will show up here."
+                       Style="{StaticResource ScreenPlaceholderTextStyle}"
+                       Visibility="{Binding HasRecentGames, Converter={StaticResource InverseBoolToVisibility}}" />
+
+            <!-- Condensed, not full-bleed: 3 columns x 3 rows (fixed-size content, centered in the
+                 available space) — row 0 spans all 3 columns for the hero; rows 1-2 hold a 2x2 grid
+                 of the next 4 recent games (cols 0-1) beside the stats panel (col 2, spanning both
+                 rows) — 1 hero + 4 grid tiles = 5 recently-played games shown in total. -->
+            <Grid MaxWidth="1240" HorizontalAlignment="Center" VerticalAlignment="Center"
+              Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Row 0: Continue Playing — the single most-recently-played game, full width. The
+                 highlighted gradient only shows while this is the actually-selected tile (click it,
+                 or land here via keyboard/gamepad nav once that's wired up); selecting a different
+                 game elsewhere drops it back to the same plain card look every other tile has. -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="220" Margin="0,0,0,20"
+                    BorderThickness="3"
+                    Visibility="{Binding HasContinuePlayingGame, Converter={StaticResource BoolToVisibility}}"
+                    Cursor="Hand" MouseLeftButtonUp="ContinuePlayingCard_Click">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsContinuePlayingGameSelected}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource HeroGradientBrush}" />
+                                <Setter Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid Margin="28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- HeroArtworkSize knob: 170 here (both Width and Height) controls the hero image size;
+                         the hero card's own MinHeight above should grow to match if you size this up a lot. -->
+                    <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12" Background="#22000000">
+                        <TextBlock Text="🎮" FontSize="50" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
+                    </Border>
+                    <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12">
+                        <Border.Background>
+                            <ImageBrush ImageSource="{Binding ContinuePlayingGame.Artwork}" Stretch="UniformToFill" />
+                        </Border.Background>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="CONTINUE PLAYING" Foreground="#D7E9FF" FontSize="12" FontWeight="Bold" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding ContinuePlayingGame.Title}" Foreground="White" FontSize="30" FontWeight="Bold"
+                                   TextWrapping="Wrap" Margin="0,0,0,12" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                                    Visibility="{Binding ContinuePlayingGame.HasSourceLabel, Converter={StaticResource BoolToVisibility}}">
+                            <Border Background="#2A3B6B" CornerRadius="4" Padding="8,3">
+                                <TextBlock Text="{Binding ContinuePlayingGame.SourceLabel}" Foreground="White" FontSize="11" FontWeight="Bold" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                            <TextBlock Text="{Binding ContinuePlayingGame.LastPlayedLabel}" Foreground="#D7E9FF" FontSize="13" Margin="0,0,20,0" />
+                            <TextBlock Text="{Binding ContinuePlayingGame.PlaytimeLabel}" Foreground="#D7E9FF" FontSize="13" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource PlayCircleButtonStyle}" Content="&#xE768;"
+                                    Click="ContinuePlaying_Click" Margin="0,0,14,0" />
+                            <TextBlock Text="Press A to Play" Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Rows 1-2, columns 0-1: the next 4 recent games, 2x2. -->
+            <ListBox Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,20,0"
+                     ItemsSource="{Binding OtherRecentGames}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     ItemContainerStyle="{StaticResource RecentRowStyle}"
+                     MouseDoubleClick="RecentGame_DoubleClick">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="2" Rows="2" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+
+            <!-- Rows 1-2, column 2: system stats, spanning the same height as the 2x2 grid beside it. -->
+            <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" CornerRadius="14" Padding="20"
+                    Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="SYSTEM OVERVIEW" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11" FontWeight="Bold" Margin="0,0,0,16" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource SystemOverviewIconStyle}">
+                            <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Foreground="{StaticResource BrandCyanBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Games.Count}" Style="{StaticResource SystemOverviewValueStyle}" />
+                            <TextBlock Text="Games Installed" Style="{StaticResource SystemOverviewLabelStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource SystemOverviewIconStyle}">
+                            <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding StorageUsedPercent, StringFormat={}{0:N0}%}" Style="{StaticResource SystemOverviewValueStyle}" />
+                            <TextBlock Text="{Binding StorageDriveLabel, StringFormat='Storage Used ({0})'}" Style="{StaticResource SystemOverviewLabelStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                        <Border Style="{StaticResource SystemOverviewIconStyle}">
+                            <TextBlock Text="&#xE917;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Foreground="{StaticResource InformationBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SessionUptimeLabel}" Style="{StaticResource SystemOverviewValueStyle}" />
+                            <TextBlock Text="Session Uptime" Style="{StaticResource SystemOverviewLabelStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding StorageUsedLabel}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+                        <TextBlock Grid.Column="1" Text="{Binding StorageFreeLabel}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+                    </Grid>
+                    <Grid Height="6">
+                        <Border CornerRadius="3" Background="{StaticResource SurfaceHoverBrush}" />
+                        <Border CornerRadius="3" Background="{StaticResource SuccessBrush}" HorizontalAlignment="Left"
+                                Width="{Binding StorageUsedPercent, Converter={StaticResource PercentToPixelWidth}, ConverterParameter=260}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
