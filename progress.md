@@ -184,5 +184,8 @@ Fullscreen launcher with controller nav, keyboard/mouse fallback, manual add-gam
 - [x] Overlay is mapped to wrong button which is option buttion need to be mapped to home button or also known as xbox guide button in case of playstation controllers it should be PS button
 - [x] We also need to work on the scrolling animation as it is jerky and needs to be smoothed out the main 
 
-- [ ] the background images of the recently played tab of games need to be animated a little like moving animation or something like that.
+- [x] the background images of the recently played tab of games need to be animated a little like moving animation or something like that.
+- [ ] First to make release on github with a setup installer.msi , installer.exe , zip portable
 - [ ] also need to do more focus on controller first navigation
+- [ ] Need to work on the overlay; Have to make sure the overlay is shown only when game is being played and make sure that the overlay is controlled by the controller not mouse when overlay is in focus also the overlay is not appearing on top of the game need to switch windows everytime just to see the overlay.
+- [ ] Remove the cross (close) and minimize icons and replace them with a power option which will be navigated by controller which will include the option of turning off system restarting the system exiting cartridge os to desktop and shutting down cartidge os
