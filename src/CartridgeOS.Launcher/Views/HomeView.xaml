@@ -10,14 +10,17 @@
              ListBoxItem/Selector style — center-vs-side sizing is driven directly by HomeCarouselSlot.IsCenter
              via the DataTriggers below, with no dependency on Selector.IsSelected or a ScrollViewer at all. -->
         <DataTemplate x:Key="HomeCarouselItemTemplate">
-            <!-- Every slot's container is freshly created on each nav step (HomeCarouselSlots returns a new
-                 list each time, not an incremental move), so there's no single continuous element to slide —
-                 this pop-in (scale + fade from Loaded) is what stands in for that, so the row settling into
-                 its new sizes doesn't read as an instant, rigid snap. -->
-            <Border x:Name="Tile" Margin="10" CornerRadius="12"
+            <!-- A slot tracks one game for as long as it's in the visible window (see
+                 MainViewModel.RefreshHomeCarouselSlots), so this container persists across nav steps —
+                 Loaded only fires once, on genuine first appearance. Position/size are owned entirely by
+                 HomeView.xaml.cs (HomeCarouselTile_Loaded/ApplyOffset), driven by HomeCarouselSlot.Offset,
+                 not by XAML triggers — that's what makes a tile actually slide and grow/shrink as its
+                 distance from the center slot changes, instead of snapping in place. -->
+            <Border x:Name="Tile" CornerRadius="12"
                     Background="{StaticResource SurfaceRaisedBrush}"
                     BorderThickness="3" Cursor="Hand"
                     MouseLeftButtonUp="HomeCarouselTile_Click"
+                    Loaded="HomeCarouselTile_Loaded"
                     RenderTransformOrigin="0.5,0.5">
                 <Border.BorderBrush>
                     <SolidColorBrush Color="Transparent" />
@@ -114,15 +117,12 @@
                         </BeginStoryboard>
                     </DataTrigger.ExitActions>
                 </DataTrigger>
+                <!-- Cosmetic only — Width/Height/Canvas position are owned by code-behind (see above). -->
                 <DataTrigger Binding="{Binding IsCenter}" Value="True">
-                    <Setter TargetName="Tile" Property="Width" Value="260" />
-                    <Setter TargetName="Tile" Property="Height" Value="360" />
                     <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
                     <Setter TargetName="TitleText" Property="FontSize" Value="18" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsCenter}" Value="False">
-                    <Setter TargetName="Tile" Property="Width" Value="190" />
-                    <Setter TargetName="Tile" Property="Height" Value="264" />
                     <Setter TargetName="TitleText" Property="FontSize" Value="14" />
                 </DataTrigger>
             </DataTemplate.Triggers>
@@ -155,15 +155,18 @@
 
         <!-- Carousel — PS5-style: a fixed window of slots computed from the selected index
              (MainViewModel.HomeCarouselSlots), center one bigger. Left/Right (MainWindow.HandleGamepadAction)
-             just changes SelectedGame; the slot list recomputes and this re-renders — no
-             Selector/ScrollViewer centering to keep in sync, which is what kept breaking. -->
+             just changes SelectedGame; the slot list updates in place and HomeView.xaml.cs animates each
+             tile to its new Canvas position/size — no Selector/ScrollViewer centering to keep in sync,
+             which is what kept breaking. Canvas (not a StackPanel) since tiles are absolutely positioned
+             by offset-from-center, not left-to-right document flow — see HomeView.xaml.cs for the layout
+             math; 1750x360 = (2*HomeCarouselSideCount+1) slots * 250px pitch, tallest (center) tile height. -->
         <ItemsControl Grid.Row="1"
                       ItemsSource="{Binding HomeCarouselSlots}"
                       ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
                       HorizontalAlignment="Center">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
+                    <Canvas Width="1750" Height="360" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>

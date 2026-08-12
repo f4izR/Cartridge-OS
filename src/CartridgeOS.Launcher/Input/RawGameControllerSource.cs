@@ -44,6 +44,9 @@ internal static class RawGameControllerSource
         if (Held(5)) bits |= (ushort)GamepadButton.RightShoulder;
         if (Held(8)) bits |= (ushort)GamepadButton.Back;
         if (Held(9)) bits |= (ushort)GamepadButton.Start;
+        // ponytail: index 12 is the PS/guide button on DualShock4/DualSense's HID report (after
+        // Share/Options/L3/R3) under RawGameController — pad-dependent, recalibrate if it maps wrong.
+        if (Held(12)) bits |= (ushort)GamepadButton.Guide;
 
         if (_switches.Length > 0)
         {

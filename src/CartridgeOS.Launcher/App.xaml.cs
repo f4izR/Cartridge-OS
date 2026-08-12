@@ -124,7 +124,20 @@ public partial class App : Application
         _idleTimer.Tick += (_, _) => CheckIdle();
         _idleTimer.Start();
 
-        ShowLauncher();
+        ShowSplashThenLauncher();
+    }
+
+    // Steam-style boot splash: shows immediately, plays its fixed reveal animation, then swaps to
+    // the real launcher window.
+    private void ShowSplashThenLauncher()
+    {
+        var splash = new SplashWindow();
+        splash.AnimationCompleted += () => Dispatcher.BeginInvoke(() =>
+        {
+            ShowLauncher();
+            splash.Close();
+        });
+        splash.Show();
     }
 
     private PipeResponse HandleSingleInstanceSignal(PipeRequest request)

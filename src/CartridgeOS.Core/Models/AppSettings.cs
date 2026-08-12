@@ -19,6 +19,9 @@ public sealed class AppSettings
     /// (e.g. "D:\"). Null means "not chosen yet — use the system drive".</summary>
     public string? StorageDriveLetter { get; set; }
 
+    public bool NavigationSoundEnabled { get; set; } = true;
+    public bool ConfirmSoundEnabled { get; set; } = true;
+
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverInactivityMinutes { get; set; } = 1;
     public double ScreenSaverVolume { get; set; } = 0.5;

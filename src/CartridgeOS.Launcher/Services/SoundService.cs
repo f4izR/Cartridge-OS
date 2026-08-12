@@ -17,8 +17,13 @@ public static class SoundService
     private static readonly Lazy<SoundPlayer> NavigateSound = new(() => Load("nav.wav"));
     private static readonly Lazy<SoundPlayer> ConfirmSound = new(() => Load("confirm.wav"));
 
-    public static void PlayNavigate() => Play(NavigateSound);
-    public static void PlayConfirm() => Play(ConfirmSound);
+    /// <summary>Settings-driven mutes (MainViewModel.NavigationSoundEnabled/ConfirmSoundEnabled) — plain
+    /// static flags since every call site here is a static method with no viewmodel in reach.</summary>
+    public static bool NavigateEnabled { get; set; } = true;
+    public static bool ConfirmEnabled { get; set; } = true;
+
+    public static void PlayNavigate() => Play(NavigateSound, NavigateEnabled);
+    public static void PlayConfirm() => Play(ConfirmSound, ConfirmEnabled);
 
     private static SoundPlayer Load(string fileName)
     {
@@ -27,8 +32,9 @@ public static class SoundService
         return player;
     }
 
-    private static void Play(Lazy<SoundPlayer> sound)
+    private static void Play(Lazy<SoundPlayer> sound, bool enabled)
     {
+        if (!enabled) return;
         try
         {
             sound.Value.Play();

@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
+             xmlns:views="clr-namespace:CartridgeOS.Launcher.Views"
              mc:Ignorable="d">
 
     <UserControl.Resources>
@@ -132,9 +133,7 @@
     </UserControl.Resources>
 
     <Grid ClipToBounds="True">
-        <!-- Ambient drifting-dot background, spawned/animated in code-behind (ParticleCanvas_Loaded) —
-             purely decorative, sits behind everything else so it never interferes with hit-testing. -->
-        <Canvas x:Name="ParticleCanvas" IsHitTestVisible="False" Loaded="ParticleCanvas_Loaded" SizeChanged="ParticleCanvas_SizeChanged" />
+        <views:AmbientParticleBackground />
 
         <Grid Margin="24">
             <TextBlock Text="No games played yet — your recently played games will show up here."

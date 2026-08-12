@@ -4,12 +4,14 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 
 ## Screens & navigation
 
-- **Home** — PS5-dashboard-style default screen. Selected game's artwork fills the background (top and bottom gradient fades keep the header and title/carousel text legible over it), an infinite horizontal carousel sits at the bottom with the selected tile enlarged and centered, game title/last-played/playtime/Play button above it.
+- **Boot splash** — Steam-style animated splash shown at startup, before the launcher window: the logo mark traces itself in (outer shell, then inner diamond), glow builds, a solid fill lands on top, then the wordmark slides/fades in, with a whoosh sound timed to the trace start. Fixed ~2.6s duration, then swaps to the launcher.
+- **Home** — PS5-dashboard-style default screen. Selected game's artwork fills the background (top and bottom gradient fades keep the header and title/carousel text legible over it), an infinite horizontal carousel sits at the bottom with the selected tile enlarged and centered — tiles genuinely slide and grow/shrink as you move, not just swap content in place — game title/last-played/playtime/Play button above it.
 - **Recently Played** — "Continue Playing" hero card (most recent game, highlights with a blue border + gradient when selected) + a 2x2 grid of the next 4 recently-played games + a System Overview panel (games installed, storage used — labeled with which drive, e.g. "Storage Used (D:)" — session uptime). Ambient drifting-particle background layer behind the content. Selection highlight is consistent between the hero and the grid — selecting one always clears the other.
-- **Library** — full virtualized grid of every game in the collection, filterable via the header search box (search only appears on this screen, since it's the only one it actually filters). Double-click a tile to launch, same as every other screen.
+- **Library** — full virtualized grid of every game in the collection, filterable via the header search box (search only appears on this screen, since it's the only one it actually filters). Double-click a tile to launch, same as every other screen. Same ambient drifting-particle background as Recently Played.
 - **Settings** — collapsible right-side panel (gear icon), Steam/NVIDIA-app-style category rail:
   - **Library tab**: Scan for Games, Find More Games (+ scan-directory picker, see below), Add Game, Remove Game, and a storage-drive picker (which fixed drive the Recently Played storage stat reads from — defaults to the system drive).
   - **Wallpaper tab**: app-wide background source (selected game's artwork vs. a custom image) + file picker.
+  - **Sound tab**: independent toggles for navigation sound and confirm sound.
 - Top nav bar (Home / Recently Played / Library) is a centered pill switcher — mouse click, keyboard, or gamepad L1/R1 (shoulder buttons) all work; switching crossfades rather than cutting instantly. Settings' own Library/Wallpaper/Screen Saver tabs fade in on switch the same way.
 - Header bar: logo, nav pills, and a status area (controller/device battery, real internet-reachability indicator, live search — Library only, clock, settings/minimize/close buttons).
 - A game's artwork zooms in briefly the moment it's launched, on every screen that can launch one (Library, Home carousel, Recently Played's hero card and 2x2 grid).
@@ -42,7 +44,7 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 
 ## In-game
 
-- **In-game overlay** — Ctrl+Shift+O or gamepad Start/Options, shows the running game's title with Return-to-launcher / Quit-game buttons. Works for directly-launched executables only (Steam/Xbox shell launches have no trackable process).
+- **In-game overlay** — Ctrl+Shift+O or gamepad Guide/PS button, shows the running game's title with Return-to-launcher / Quit-game buttons. Works for directly-launched executables only (Steam/Xbox shell launches have no trackable process).
 - **Discord Rich Presence** — shows "Playing {title}" while a game is running, including Steam/Xbox launches (just doesn't auto-clear on exit for those, since there's no exit signal to hook).
 - **"Launching..." tile indicator** — covers a tile the moment its launch is requested, so repeated clicks on a slow (especially shell-protocol) launch don't queue multiple attempts.
 - Launcher window minimizes automatically on every launch so it doesn't sit on top of the game.
@@ -59,7 +61,7 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 - Disposable launcher UI + persistent tray core — closing the window frees its memory (destroyed, not hidden) while the tray icon, controller listener, hotkey, and Discord connection keep running; reopens from the tray icon or by running the exe again.
 - Tray icon: Open Cartridge OS / Exit Cartridge OS.
 - Named-pipe IPC transport (`Core/Ipc/`) — used for single-instance signaling today; a separate `CartridgeOS.Service` process hosts a basic Ping/GetGameCount endpoint over the same mechanism, not yet a full architecture migration.
-- Sound effects on navigation and game launch (placeholder procedurally-generated tones, not final sound design).
+- Sound effects on navigation and game launch (placeholder procedurally-generated tones, not final sound design) — independently toggleable in Settings → Sound.
 - Local, offline storage only (SQLite for games, a small JSON file for settings) — no accounts, no cloud.
 - Internet connectivity indicator does a real reachability probe (Windows' own connectivity-check endpoint) every few seconds, not just a network-adapter-up check — so it correctly flips to offline even if the adapter itself stays connected but there's no actual internet upstream.
 

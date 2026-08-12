@@ -26,7 +26,7 @@ public sealed class GamepadWatcher
         [GamepadButton.A] = GamepadAction.Confirm,
         [GamepadButton.B] = GamepadAction.Back,
         [GamepadButton.Y] = GamepadAction.Secondary,
-        [GamepadButton.Start] = GamepadAction.Menu,
+        [GamepadButton.Guide] = GamepadAction.Menu, // Xbox guide button / PS button — overlay toggle
         [GamepadButton.LeftShoulder] = GamepadAction.PreviousTab,
         [GamepadButton.RightShoulder] = GamepadAction.NextTab,
     };
@@ -76,7 +76,7 @@ public sealed class GamepadWatcher
         while (!token.IsCancellationRequested)
         {
             var now = DateTime.UtcNow;
-            if (XInput.XInputGetState(0, out var state) == 0) // 0 = ERROR_SUCCESS, controller connected
+            if (XInput.XInputGetStateWithGuide(0, out var state) == 0) // 0 = ERROR_SUCCESS, controller connected
             {
                 SetController(ControllerKind.Xbox);
                 RefreshBatteryIfDue(now, () => XInput.GetBatteryPercent(0));

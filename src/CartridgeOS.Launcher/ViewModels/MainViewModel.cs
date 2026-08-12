@@ -102,6 +102,32 @@ public sealed class MainViewModel : ViewModelBase
     /// System Overview panel can label the stat with which drive it's actually showing.</summary>
     public string StorageDriveLabel => (SelectedStorageDrive ?? Path.GetPathRoot(Environment.SystemDirectory)!).TrimEnd('\\');
 
+    public bool NavigationSoundEnabled
+    {
+        get => _settings.NavigationSoundEnabled;
+        set
+        {
+            if (_settings.NavigationSoundEnabled == value) return;
+            _settings.NavigationSoundEnabled = value;
+            SoundService.NavigateEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    public bool ConfirmSoundEnabled
+    {
+        get => _settings.ConfirmSoundEnabled;
+        set
+        {
+            if (_settings.ConfirmSoundEnabled == value) return;
+            _settings.ConfirmSoundEnabled = value;
+            SoundService.ConfirmEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
     public bool ScreenSaverEnabled
     {
         get => _settings.ScreenSaverEnabled;
@@ -187,41 +213,60 @@ public sealed class MainViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedGame, value)) return;
             OnPropertyChanged(nameof(IsContinuePlayingGameSelected));
-            OnPropertyChanged(nameof(HomeCarouselSlots));
+            RefreshHomeCarouselSlots();
             _ = RefreshHomeBackgroundAsync();
         }
     }
 
     // How many tiles show on each side of the center one — 3+3+1 = 7 visible. Bump this for a wider
-    // carousel; ComputeHomeCarouselSlots automatically shrinks it for a library smaller than that.
-    private const int HomeCarouselSideCount = 3;
+    // carousel; RefreshHomeCarouselSlots automatically shrinks it for a library smaller than that.
+    // internal: HomeView.xaml.cs mirrors this to size its Canvas — keep the two in sync.
+    internal const int HomeCarouselSideCount = 3;
 
     /// <summary>
-    /// The Home carousel's visible tiles, computed directly from SelectedGame's index — center slot is the
-    /// selected game, the rest wrap around it (modulo, matching the "infinite" Left/Right nav). Deliberately
-    /// not a ListBox.SelectedItem/ScrollViewer-driven carousel: that kept silently breaking (visual-tree
-    /// timing for finding the internal ScrollViewer, IsSelected trigger not visibly updating) because a
-    /// Selector control isn't really built for "resize and re-center the item as you move" — this sidesteps
-    /// the whole class of bug by just recomputing plain data and letting the ItemsControl re-render it.
+    /// The Home carousel's visible tiles — center slot is the selected game, the rest wrap around it
+    /// (modulo, matching the "infinite" Left/Right nav). Deliberately not a ListBox.SelectedItem/ScrollViewer
+    /// -driven carousel: that kept silently breaking (visual-tree timing for finding the internal
+    /// ScrollViewer, IsSelected trigger not visibly updating) because a Selector control isn't really built
+    /// for "resize and re-center the item as you move". A slot is keyed by which game it holds, not by a
+    /// fixed array position: a game that stays in the visible window just gets its Offset updated (so
+    /// HomeView can animate that tile sliding/resizing to its new spot), and only games newly entering or
+    /// leaving the window are added/removed. A position-keyed version (offset always mapped to the same
+    /// list index) was tried first — it never actually moved, since "the center slot" was always the same
+    /// container, so its IsCenter trigger never re-fired.
     /// </summary>
-    public IReadOnlyList<HomeCarouselSlot> HomeCarouselSlots
+    public ObservableCollection<HomeCarouselSlot> HomeCarouselSlots { get; } = [];
+
+    private void RefreshHomeCarouselSlots()
     {
-        get
+        var games = GamesView.Cast<GameTileViewModel>().ToList();
+        if (games.Count == 0)
         {
-            var games = GamesView.Cast<GameTileViewModel>().ToList();
-            if (games.Count == 0) return [];
+            HomeCarouselSlots.Clear();
+            return;
+        }
 
-            int centerIndex = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
-            if (centerIndex < 0) centerIndex = 0;
+        int centerIndex = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
+        if (centerIndex < 0) centerIndex = 0;
 
-            int side = Math.Min(HomeCarouselSideCount, (games.Count - 1) / 2); // don't show the same game twice when the library is small
-            var slots = new List<HomeCarouselSlot>();
-            for (int offset = -side; offset <= side; offset++)
-            {
-                int index = ((centerIndex + offset) % games.Count + games.Count) % games.Count;
-                slots.Add(new HomeCarouselSlot(games[index], offset == 0));
-            }
-            return slots;
+        int side = Math.Min(HomeCarouselSideCount, (games.Count - 1) / 2); // don't show the same game twice when the library is small
+
+        var existingByGame = HomeCarouselSlots.ToDictionary(s => s.Game);
+        var target = new HashSet<GameTileViewModel>();
+
+        for (int offset = -side; offset <= side; offset++)
+        {
+            int index = ((centerIndex + offset) % games.Count + games.Count) % games.Count;
+            var game = games[index];
+            target.Add(game);
+
+            if (existingByGame.TryGetValue(game, out var slot)) slot.Offset = offset;
+            else HomeCarouselSlots.Add(new HomeCarouselSlot(game, offset));
+        }
+
+        for (int i = HomeCarouselSlots.Count - 1; i >= 0; i--)
+        {
+            if (!target.Contains(HomeCarouselSlots[i].Game)) HomeCarouselSlots.RemoveAt(i);
         }
     }
 
@@ -406,6 +451,8 @@ public sealed class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
+        SoundService.NavigateEnabled = _settings.NavigationSoundEnabled;
+        SoundService.ConfirmEnabled = _settings.ConfirmSoundEnabled;
 
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -430,7 +477,7 @@ public sealed class MainViewModel : ViewModelBase
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
-        GamesView.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HomeCarouselSlots)); // covers search-filter changes, scan results, add/remove — anything that changes what's visible or its order
+        GamesView.CollectionChanged += (_, _) => RefreshHomeCarouselSlots(); // covers search-filter changes, scan results, add/remove — anything that changes what's visible or its order
 
         if (!string.IsNullOrEmpty(_settings.CustomWallpaperPath))
             _ = LoadCustomWallpaperAsync(_settings.CustomWallpaperPath);

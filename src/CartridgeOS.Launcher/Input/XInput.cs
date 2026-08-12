@@ -17,6 +17,7 @@ public enum GamepadButton : ushort
     B = 0x2000,
     X = 0x4000,
     Y = 0x8000,
+    Guide = 0x0400, // Xbox guide / PS button — only visible via XInputGetStateEx, not the public XInputGetState
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -56,6 +57,19 @@ internal static class XInput
 
     [DllImport("xinput1_4.dll")]
     public static extern int XInputGetState(int dwUserIndex, out XInputState pState);
+
+    // Undocumented (exported by ordinal, not by name) — same shape as XInputGetState but its wButtons
+    // also carries the guide/home button bit (0x0400), which the public XInputGetState masks out.
+    // Widely relied on by other launchers/emulators for exactly this; falls back to XInputGetState
+    // (still connection-checkable, just without the guide bit) if the ordinal isn't exported.
+    [DllImport("xinput1_4.dll", EntryPoint = "#100")]
+    private static extern int XInputGetStateEx(int dwUserIndex, out XInputState pState);
+
+    public static int XInputGetStateWithGuide(int dwUserIndex, out XInputState pState)
+    {
+        try { return XInputGetStateEx(dwUserIndex, out pState); }
+        catch (EntryPointNotFoundException) { return XInputGetState(dwUserIndex, out pState); }
+    }
 
     [DllImport("xinput1_4.dll")]
     private static extern int XInputGetBatteryInformation(int dwUserIndex, byte devType, out XInputBatteryInformation pBatteryInformation);

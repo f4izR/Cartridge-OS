@@ -176,6 +176,23 @@
                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </TabItem>
+                <TabItem Header="Sound" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Sound" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <CheckBox Content="Navigation Sound" IsChecked="{Binding NavigationSoundEnabled}"
+                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
+                                  Margin="0,0,0,4" Cursor="Hand" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="The blip sound when moving between tiles." />
+
+                        <CheckBox Content="Confirm Sound" IsChecked="{Binding ConfirmSoundEnabled}"
+                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
+                                  Margin="0,0,0,4" Cursor="Hand" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="The sound when confirming a selection." />
+                    </StackPanel>
+                </TabItem>
                 <TabItem Header="Screen Saver" Style="{StaticResource SettingsTabItemStyle}">
                     <StackPanel>
                         <TextBlock Text="Screen Saver" Style="{StaticResource SettingsSectionHeadingStyle}" />
