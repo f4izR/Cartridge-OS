@@ -15,8 +15,10 @@ public sealed class GamepadWatcher
     private static readonly GamepadButton[] DirectionButtons =
         [GamepadButton.DPadUp, GamepadButton.DPadDown, GamepadButton.DPadLeft, GamepadButton.DPadRight];
 
-    // Physical-button -> UI-action vocabulary. X and the view/select "Back" button aren't wired to
-    // anything in the launcher yet, so they're left unmapped (ponytail: add an entry when they get a use).
+    // Physical-button -> UI-action vocabulary — see keybinds.md for the full picture (glyphs, keyboard
+    // equivalents, and the reasoning per binding). GamepadButton.Back here is the physical Xbox View /
+    // PlayStation Share button (XInput's legacy "Back" name) — not to be confused with GamepadAction.Back,
+    // which is the B/Circle face button's action.
     private static readonly Dictionary<GamepadButton, GamepadAction> ActionMap = new()
     {
         [GamepadButton.DPadUp] = GamepadAction.NavigateUp,
@@ -25,7 +27,9 @@ public sealed class GamepadWatcher
         [GamepadButton.DPadRight] = GamepadAction.NavigateRight,
         [GamepadButton.A] = GamepadAction.Confirm,
         [GamepadButton.B] = GamepadAction.Back,
+        [GamepadButton.X] = GamepadAction.ToggleSearch,
         [GamepadButton.Y] = GamepadAction.Secondary,
+        [GamepadButton.Back] = GamepadAction.ToggleSettings, // physical View/Share button
         [GamepadButton.Guide] = GamepadAction.Menu, // Xbox guide button / PS button — overlay toggle
         [GamepadButton.LeftShoulder] = GamepadAction.PreviousTab,
         [GamepadButton.RightShoulder] = GamepadAction.NextTab,

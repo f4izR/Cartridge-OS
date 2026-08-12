@@ -28,8 +28,18 @@
                         <!-- Card min-height and the artwork square below (RecentArtworkSize) are the two knobs that
                              control this row's overall size — bump RecentArtworkSize for bigger art, MinHeight to
                              match (art + 2x Padding, so it isn't cropped/squeezed). -->
+                        <!-- Idle scale is 0.97, not 1 — selection animates UP to exactly 1 (native size)
+                             rather than past it, so the selected card never grows beyond its own layout
+                             cell. Scaling past 1 got clipped by the ListBox's viewport (a straight cut on
+                             whichever edge had no spare margin to grow into). -->
                         <Border x:Name="Card" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="10" Padding="16" MinHeight="132"
-                                BorderThickness="3" BorderBrush="Transparent">
+                                BorderThickness="3" RenderTransformOrigin="0.5,0.5">
+                            <Border.BorderBrush>
+                                <SolidColorBrush Color="Transparent" />
+                            </Border.BorderBrush>
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                            </Border.RenderTransform>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -60,6 +70,8 @@
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- Whole-card transition on selection — scale + border color, not just a hard
+                                 border-color cut. Same shape as Library's GameTileStyle selection animation. -->
                             <DataTrigger Value="True">
                                 <DataTrigger.Binding>
                                     <MultiBinding Converter="{StaticResource EqualsMultiConverter}">
@@ -67,7 +79,44 @@
                                         <Binding Path="DataContext.SelectedGame" RelativeSource="{RelativeSource AncestorType=ListBox}" />
                                     </MultiBinding>
                                 </DataTrigger.Binding>
-                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Card"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Card"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <ColorAnimation Storyboard.TargetName="Card"
+                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                            To="#49C1ED" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Card"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="0.97" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="Card"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="0.97" Duration="0:0:0.15" />
+                                            <ColorAnimation Storyboard.TargetName="Card"
+                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                            To="Transparent" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Card" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
@@ -161,18 +210,63 @@
                  highlighted gradient only shows while this is the actually-selected tile (click it,
                  or land here via keyboard/gamepad nav once that's wired up); selecting a different
                  game elsewhere drops it back to the same plain card look every other tile has. -->
-            <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="220" Margin="0,0,0,20"
-                    BorderThickness="3"
+            <Border x:Name="ContinuePlayingCard" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="220" Margin="0,0,0,20"
+                    BorderThickness="3" RenderTransformOrigin="0.5,0.5"
                     Visibility="{Binding HasContinuePlayingGame, Converter={StaticResource BoolToVisibility}}"
                     Cursor="Hand" MouseLeftButtonUp="ContinuePlayingCard_Click">
+                <!-- Idle scale is 0.985, not 1 — selection animates UP to exactly 1 (native size) rather
+                     than past it, so the selected card never grows beyond its own layout cell. Scaling
+                     past 1 got clipped by the row's viewport (a straight cut on whichever edge had no
+                     spare margin to grow into). -->
+                <Border.RenderTransform>
+                    <ScaleTransform ScaleX="0.985" ScaleY="0.985" />
+                </Border.RenderTransform>
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
                         <Setter Property="BorderBrush" Value="Transparent" />
                         <Style.Triggers>
+                            <!-- Whole-card transition on selection — scale + a gradient background + border
+                                 color, not just an instant border-color cut. Background itself still swaps
+                                 instantly (crossfading a solid brush to a gradient brush isn't a plain
+                                 DoubleAnimation/ColorAnimation target), but the scale+border together read as
+                                 the whole card responding, not just its edge. -->
                             <DataTrigger Binding="{Binding IsContinuePlayingGameSelected}" Value="True">
                                 <Setter Property="Background" Value="{StaticResource HeroGradientBrush}" />
                                 <Setter Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <!-- No TargetName — this Style is a plain FrameworkElement.Style (not a
+                                     ControlTemplate), which has no NameScope for Storyboard.TargetName to
+                                     resolve against, even for the same element the Style is applied to (hit
+                                     this exact MC4011 compile error earlier this session, see keybinds.md/
+                                     context.md's Ken-Burns section). Self-targets via the property path only. -->
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="0.985" Duration="0:0:0.2" />
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="0.985" Duration="0:0:0.2" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>

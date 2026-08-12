@@ -34,7 +34,8 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 
 ## Controller & input
 
-- Xbox controllers via XInput, PlayStation (DualShock/DualSense) and other HID/DirectInput pads via `RawGameController` — both normalized into the same internal action set (navigate up/down/left/right, confirm, back, secondary, menu) so the UI never sees which physical button did what.
+- Xbox controllers via XInput, PlayStation (DualShock/DualSense) and other HID/DirectInput pads via `RawGameController` — both normalized into the same internal action set (navigate, confirm, back, secondary, menu, toggle settings, toggle search, previous/next tab) so the UI never sees which physical button did what. Full binding table, per-brand glyphs, and keyboard equivalents live in `keybinds.md`.
+- Controller-first: every screen, Settings, and Library search are all reachable without touching a mouse — B/Circle backs out of whatever's open (Settings, then Search), the View/Share button opens Settings directly, X/Square opens search.
 - Per-brand on-screen button glyphs (Xbox vs. PlayStation labels) where used, e.g. the overlay's toggle hint.
 - Full keyboard equivalents for every gamepad action — the app is fully usable with no controller attached.
 - Right-stick-as-mouse emulation (moves the real system cursor, right trigger clicks) — primary monitor only.

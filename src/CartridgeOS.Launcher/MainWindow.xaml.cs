@@ -84,6 +84,8 @@ public partial class MainWindow : Window
                 Key.Enter or Key.Space => GamepadAction.Confirm,
                 Key.Insert => GamepadAction.Secondary,
                 Key.Apps => GamepadAction.Menu, // the Windows "context menu" key — keyboard equivalent of gamepad Menu/Start/Options
+                Key.Escape => GamepadAction.Back,
+                Key.Tab => GamepadAction.ToggleSettings,
                 _ => null,
             };
             if (!action.HasValue) return;
@@ -148,6 +150,18 @@ public partial class MainWindow : Window
         if (action == GamepadAction.Menu) OpenGameContextMenu(vm);
         if (action == GamepadAction.PreviousTab) CycleScreen(vm, -1);
         if (action == GamepadAction.NextTab) CycleScreen(vm, 1);
+        // Back closes whatever's on top rather than navigating screens — same "back out of the overlay,
+        // don't touch anything underneath" convention every console dashboard uses B/Circle for. Settings
+        // takes priority since it can be open regardless of which screen search belongs to.
+        if (action == GamepadAction.Back)
+        {
+            if (vm.IsSettingsOpen) vm.IsSettingsOpen = false;
+            else if (vm.IsSearchOpen) vm.IsSearchOpen = false;
+        }
+        if (action == GamepadAction.ToggleSettings) vm.ToggleSettingsCommand.Execute(null);
+        // Search only exists on Library (see the search pill's own Visibility binding) — no-op elsewhere
+        // rather than opening a search box the user can't see.
+        if (action == GamepadAction.ToggleSearch && vm.SelectedScreen == AppScreen.Library) vm.ToggleSearchCommand.Execute(null);
     }
 
     /// <summary>Keyboard/gamepad nav for the Recently Played screen: a fixed 3-row x 2-col layout where row 0
