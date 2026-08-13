@@ -180,4 +180,173 @@
         </Setter>
     </Style>
 
+    <!-- Flat "ghost" button — SurfaceRaisedBrush fill, rounds to match PrimaryButtonStyle's CornerRadius=8
+         instead of every window redeclaring its own sharp-cornered inline Button (Cancel/Select All/etc. —
+         the un-rounded corners were a chunk of why those windows read as off-theme). -->
+    <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="16,9" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="8">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Themed CheckBox — replaces the native OS checkbox (white square, system accent check) with a
+         rounded box that fills brand cyan when checked, matching every other checked/selected state in
+         this app (nav pills, selected tiles, etc. all use BrandCyanBrush). -->
+    <Style x:Key="ThemedCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal">
+                        <Border x:Name="Box" Width="18" Height="18" CornerRadius="4"
+                                Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1" VerticalAlignment="Center">
+                            <Path x:Name="Check" Data="M2,6 L5,9 L11,2" Stroke="{StaticResource TextOnAccentBrush}"
+                                  StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" Visibility="Collapsed" Margin="1" />
+                        </Border>
+                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Themed ComboBoxItem (dropdown row) — plain rounded highlight, no native selection chrome. -->
+    <Style x:Key="ThemedComboBoxItemStyle" TargetType="ComboBoxItem">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}" Margin="2,1">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Themed ComboBox — the native Windows combo (gray chrome, square corners, system-accent dropdown
+         highlight) was the single biggest "looks old fashioned" offender. Same rounded/flat/dark-surface
+         shape as every other input in this app, dropdown styled like ContextMenu's popup (SurfaceRaisedBrush
+         card + drop shadow) for visual consistency with it. -->
+    <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ThemedComboBoxItemStyle}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <!-- Below the chrome border, transparent, purely for click/dropdown-toggle hit-testing
+                             (the border above sets IsHitTestVisible=False so clicks fall through to this). -->
+                        <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press" Background="Transparent" BorderThickness="0"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="{TemplateBinding Background}" />
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" IsHitTestVisible="False">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                                <Path Grid.Column="1" Data="M0,0 L8,0 L4,5 Z" Fill="{StaticResource TextSecondaryBrush}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            </Grid>
+                        </Border>
+                        <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                            <Border Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="8" MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="240" Margin="0,4,0,0">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="Black" Opacity="0.4" BlurRadius="18" ShadowDepth="6" Direction="270" />
+                                </Border.Effect>
+                                <ScrollViewer Margin="4" SnapsToDevicePixels="True">
+                                    <StackPanel IsItemsHost="True" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Themed ListBoxItem — drops the native blue selection box + dotted focus rectangle for a plain
+         rounded hover/selected highlight, same SurfaceHoverBrush every other hover state in this app uses. -->
+    <Style x:Key="ThemedListBoxItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" Margin="0,2">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>
