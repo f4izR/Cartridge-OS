@@ -28,12 +28,12 @@ button. Don't confuse the two when reading `GamepadWatcher.ActionMap`.
 | View / Share | View | Share | Toggle Settings | Opens/closes the Settings sidebar | Xbox dashboard's View button is the standard "more options" button; PS5's equivalent is Share/Create in some apps |
 | Left Shoulder (LB/L1) | LB | L1 | Previous Tab | Home → Recently Played → Library, cycling backward | Universal — shoulder buttons page between tabs in nearly every console UI (Xbox dashboard, PS5 settings, Steam Big Picture) |
 | Right Shoulder (RB/R1) | RB | R1 | Next Tab | Cycles forward through the three screens | Same as above |
+| Start | Start | Options | Power | Opens/closes the power menu (Turn Off System / Restart System / Exit to Desktop / Shut Down Cartridge OS) — replaces the old bare minimize/close title-bar buttons | Previously unbound since the overlay toggle moved to Guide/PS; Start/Options is the conventional "system menu" button on every console dashboard |
 | Right Trigger | RT | R2 | *(mouse click)* | Right-stick mouse emulation's click button — not a `GamepadAction`, handled separately (`MouseEmulator`) | Matches "trigger = click" in any controller-as-mouse scheme |
 | Right Stick | Right Stick | Right Stick | *(mouse move)* | Moves the real system cursor, primary monitor only | Same as most "controller as mouse" implementations (Steam Big Picture desktop mode, etc.) |
 
-**Not yet bound to anything**: nothing — every `GamepadButton` XInput exposes now has a meaning
-except the raw analog trigger values themselves (only used as the mouse-click threshold above,
-not as their own actions) and the two thumbstick clicks (L3/R3), which have no mapped use yet.
+**Not yet bound to anything**: the raw analog trigger values themselves (only used as the
+mouse-click threshold above, not as their own actions) and the two thumbstick clicks (L3/R3).
 
 ## Screen-specific behavior
 
@@ -63,12 +63,13 @@ gamepad routing" section for the mechanism.
 | | D-Pad Up / Down | Zoom in / out (repeat-while-held, same repeat timer as nav) |
 | | Right Stick | Pan the image |
 | | Right Trigger | *(suppressed)* — no stray mouse click lands on whatever's underneath |
+| In-game overlay (`OverlayWindow`) | A / Confirm | Activates the focused button (Return to Cartridge OS / Quit Game) |
+| | B / Back, Guide/PS / Menu | Closes the overlay |
+| | D-Pad Up / Down | Move focus between the two buttons |
+| Power menu (`PowerMenuWindow`) | Confirm (A / ✕ / 1) or Enter/Space | Activates the focused option — glyph shown on screen matches the connected controller brand via `ControllerGlyphs`, same as the overlay's `MenuButtonLabel` |
+| | Back (B / ○ / 2), Start / Power, or Escape | Closes the menu |
+| | D-Pad Up / Down or Arrow Up / Down | Move focus between the four options — order top-to-bottom is Exit to Desktop, Shut Down Cartridge OS, Restart System, Turn Off System (harmless option first/focused by default, the two real PC power operations pushed to the end so they're never the accidental default) |
 | Screen saver | Any button | Dismiss |
-
-**Known gap**: the in-game overlay (`OverlayWindow`, Return to Cartridge OS / Quit Game) is
-**mouse-only** — it doesn't register as a modal gamepad target, so there's no controller way to
-click its buttons today. Toggling the overlay itself (Guide/PS button) works; using it once open
-doesn't. Worth fixing if a controller-only user actually hits this in practice.
 
 ## Keyboard equivalents
 
@@ -84,6 +85,7 @@ physical hardware (see `context.md`'s "no real UI automation here" limitation).
 | Apps (context-menu key) | Menu |
 | Escape | Back |
 | Tab | Toggle Settings |
+| F4 | Power (opens/closes the power menu) |
 
 **Deliberately no keyboard shortcut for Toggle Search** — the search box is opened by clicking its
 icon (mouse) or the X/Square button (gamepad) only. A keyboard shortcut here would need to avoid
@@ -96,5 +98,6 @@ so letters/punctuation are off the table without a focus-aware guard that doesn'
 
 | Date | What changed |
 |---|---|
+| 2026-08-13 | Overlay (`OverlayWindow`) now registers as a modal gamepad target (D-Pad Up/Down + Confirm/Back), fixing the mouse-only gap. Title bar's bare minimize/close buttons replaced with a Power button opening a new controller-navigable power menu (`PowerMenuWindow`): Turn Off System / Restart System / Exit to Desktop / Shut Down Cartridge OS. Bound to the previously-unused Start button (`GamepadAction.Power`) and keyboard F4. Each menu option also has an Alt+letter access-key keyboard alternative (native WPF mnemonics, no extra code). |
 | 2026-08-12 | Overlay toggle moved from Start/Options to the Xbox Guide button / PS button (undocumented `XInputGetStateEx`, since the public XInput API masks the guide bit out) — see `context.md`. |
 | 2026-08-12 | First real "controller-first" pass: wired up three previously-dead/missing bindings — B (`GamepadAction.Back`) now actually closes Settings/Search instead of doing nothing outside modal dialogs; added `ToggleSettings` (View/Share button) and `ToggleSearch` (X/Square) as new `GamepadAction`s so Settings and Search are reachable by controller at all (previously mouse-only). Fixed `ControllerGlyphs`' stale "Start" label for `GamepadAction.Menu` (leftover from before the Guide-button remap) to "Guide"/"PS". Added `Key.Escape`→Back and `Key.Tab`→ToggleSettings keyboard equivalents. This file created to track all of it going forward. |

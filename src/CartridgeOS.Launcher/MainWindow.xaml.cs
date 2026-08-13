@@ -86,6 +86,7 @@ public partial class MainWindow : Window
                 Key.Apps => GamepadAction.Menu, // the Windows "context menu" key — keyboard equivalent of gamepad Menu/Start/Options
                 Key.Escape => GamepadAction.Back,
                 Key.Tab => GamepadAction.ToggleSettings,
+                Key.F4 => GamepadAction.Power, // keyboard equivalent of the controller Start button
                 _ => null,
             };
             if (!action.HasValue) return;
@@ -98,6 +99,16 @@ public partial class MainWindow : Window
     public void HandleGamepadAction(GamepadAction action)
     {
         var vm = (MainViewModel)DataContext;
+
+        // Every action below acts directly on the ViewModel/background grid rather than going through
+        // WPF focus, so without this guard a minimized window or an open Settings/Search panel didn't stop
+        // Confirm/Menu/Power etc. from reaching straight through to whatever tile was still selected
+        // underneath (e.g. opening a tile's context menu while Settings covered the screen). Only the
+        // actions that can close those states stay live.
+        if (WindowState == WindowState.Minimized) return;
+        if ((vm.IsSettingsOpen || vm.IsSearchOpen) &&
+            action is not (GamepadAction.Back or GamepadAction.ToggleSettings or GamepadAction.ToggleSearch)) return;
+
         var visibleGames = vm.GamesView.Cast<GameTileViewModel>().ToList(); // nav moves through whatever the search filter is currently showing, not the full library
         // This directional math (column count, ScrollIntoView) is specific to the Library grid — running it
         // while Home/Recently Played is the active screen moved selection through a grid the user can't even
@@ -162,6 +173,7 @@ public partial class MainWindow : Window
         // Search only exists on Library (see the search pill's own Visibility binding) — no-op elsewhere
         // rather than opening a search box the user can't see.
         if (action == GamepadAction.ToggleSearch && vm.SelectedScreen == AppScreen.Library) vm.ToggleSearchCommand.Execute(null);
+        if (action == GamepadAction.Power) OpenPowerMenu();
     }
 
     /// <summary>Keyboard/gamepad nav for the Recently Played screen: a fixed 3-row x 2-col layout where row 0
@@ -227,9 +239,34 @@ public partial class MainWindow : Window
     /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>
     public void UpdateControllerBattery(int? percent) => ((MainViewModel)DataContext).ControllerBatteryPercent = percent;
 
-    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private PowerMenuWindow? _powerMenuWindow;
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Power_Click(object sender, RoutedEventArgs e) => OpenPowerMenu();
+
+    /// <summary>Opens (or, if already open, closes) the power menu — replaces the old bare minimize/close
+    /// title-bar buttons with Turn Off System / Restart System / Exit to Desktop / Shut Down Cartridge OS.</summary>
+    private void OpenPowerMenu()
+    {
+        if (_powerMenuWindow is not null)
+        {
+            _powerMenuWindow.Close();
+            return;
+        }
+
+        var app = (App)Application.Current;
+        var vm = new PowerMenuViewModel(ExitToDesktop, app.ExitApplication, app.CurrentController);
+        _powerMenuWindow = new PowerMenuWindow(vm);
+        _powerMenuWindow.Closed += (_, _) => _powerMenuWindow = null;
+        _powerMenuWindow.Show();
+    }
+
+    // What the old bare X button did — closes just this window; App-level services (tray icon, gamepad
+    // watcher, Discord presence) keep running until "Shut Down Cartridge OS" is chosen instead.
+    private void ExitToDesktop()
+    {
+        _powerMenuWindow?.Close();
+        Close();
+    }
 
     internal static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
     {

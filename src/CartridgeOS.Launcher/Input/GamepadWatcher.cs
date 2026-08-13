@@ -31,6 +31,7 @@ public sealed class GamepadWatcher
         [GamepadButton.Y] = GamepadAction.Secondary,
         [GamepadButton.Back] = GamepadAction.ToggleSettings, // physical View/Share button
         [GamepadButton.Guide] = GamepadAction.Menu, // Xbox guide button / PS button — overlay toggle
+        [GamepadButton.Start] = GamepadAction.Power, // previously unbound since the overlay toggle moved to Guide/PS
         [GamepadButton.LeftShoulder] = GamepadAction.PreviousTab,
         [GamepadButton.RightShoulder] = GamepadAction.NextTab,
     };

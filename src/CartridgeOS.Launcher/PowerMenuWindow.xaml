@@ -1,0 +1,35 @@
+<Window x:Class="CartridgeOS.Launcher.PowerMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Power"
+        Width="320" SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="Manual">
+    <Border CornerRadius="10" Padding="18"
+            Background="{StaticResource SurfaceRaisedBrush}"
+            BorderThickness="1" BorderBrush="{StaticResource BorderBrush}">
+        <StackPanel>
+            <TextBlock Text="Power" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,10" />
+
+            <Button x:Name="ExitToDesktopButton" Content="Exit to Desktop" Command="{Binding ExitToDesktopCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+            <Button Content="Shut Down Cartridge OS" Command="{Binding ShutDownCartridgeOsCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+            <Button Content="Restart System" Command="{Binding RestartSystemCommand}"
+                    Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
+                    BorderThickness="0" Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+            <Button Content="Turn Off System" Command="{Binding TurnOffSystemCommand}"
+                    Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
+                    BorderThickness="0" Padding="10,8" HorizontalAlignment="Stretch" />
+
+            <TextBlock Foreground="{StaticResource TextMutedBrush}"
+                       FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center" TextWrapping="Wrap">
+                <Run Text="Controller: D-Pad + " /><Run Text="{Binding ConfirmLabel, Mode=OneWay}" /><Run Text=" to choose, " /><Run Text="{Binding BackLabel, Mode=OneWay}" /><Run Text=" to cancel. Keyboard: arrow keys + Enter, Esc to cancel." />
+            </TextBlock>
+        </StackPanel>
+    </Border>
+</Window>

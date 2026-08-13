@@ -26,7 +26,7 @@ What's left before this ships to a real user's PC, beyond feature completion. Up
 - [ ] SQLite DB not writable by untrusted processes in a way that leads to code exec
 
 ## UX / accessibility
-- [ ] Full controller-only navigation with no dead ends (every screen reachable/exitable via controller) — mouse-clickable Minimize/Close buttons now exist in the header (fixes the mouse/keyboard-only path, Alt+F4 is no longer the only way out), but there's still no gamepad-button binding for exit/minimize
+- [x] Full controller-only navigation with no dead ends (every screen reachable/exitable via controller) — the header's old bare Minimize/Close buttons were replaced with a Power button/menu (Exit to Desktop / Shut Down Cartridge OS / Restart System / Turn Off System), bound to the controller Start button (`GamepadAction.Power`) and keyboard F4, fully controller-navigable
 - [ ] Keyboard/mouse fallback still works for setup/debugging
 - [ ] Error states are visible in fullscreen mode (no silent failures)
 

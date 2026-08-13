@@ -34,7 +34,7 @@ Pulls your library from every major platform, including:
 Launch it once and it stays running — starts automatically with Windows and lives in the background (tray + service), just like Steam Input, DS4Windows, or SCP Toolkit.
 
 ### Seamless In-Game Overlay
-An Nvidia-overlay-style in-game overlay lets you exit back to the launcher without ever touching a keyboard or mouse.
+An Nvidia-overlay-style in-game overlay lets you exit back to the launcher without ever touching a keyboard or mouse — fully controller-navigable while open, and only ever appears while a game is actually running.
 
 ### Controller-First Navigation
 The entire UI — from boot to launch to returning from a game — is designed to be fully navigable with a controller. No keyboard, no mouse required.
@@ -88,8 +88,8 @@ Three screens, switchable via the top-center nav pill (mouse click, or gamepad L
 | Per-game menu (change wallpaper, revert, delete) | Menu/Start/Options | Apps key | Right-click a tile |
 | Move the cursor | Right stick | — | — |
 | Click | Right trigger | — | Left mouse button |
-| Toggle overlay | Start (while a game is running) | Ctrl+Shift+O | — |
-| Minimize / close launcher | — | Alt+F4 (closes) | Header buttons (top-right) |
+| Toggle overlay | Guide / PS button (while a game is running) | Ctrl+Shift+O | — |
+| Open power menu | Start | F4 | Header power button (top-right) |
 
 ### The tray icon
 
@@ -99,7 +99,7 @@ Click or right-click it:
 
 ### Known limitations (current build)
 
-- Minimizing only works via mouse (header button) — no controller button does it yet. Exiting fully is controller-free by design (it goes through the tray icon), and closing the launcher window without quitting works from the controller Start button (toggles the in-game overlay, which has its own Return/Quit options) or the header's close button.
+- The overlay won't render on top of true DirectX exclusive-fullscreen games (bypasses the desktop compositor entirely) — windowed/borderless games are fine.
 - The scanners for GOG, Ubisoft Connect, EA App, Battle.net, and Xbox/Store are best-effort (no documented format to read, unlike Steam/Epic/Riot) — if one misses a game, use **+ Add Game**.
 - Right-stick mouse emulation is currently limited to your primary monitor.
 - Sound effects are placeholder tones, not final sound design.
@@ -173,9 +173,9 @@ The Launcher is controller-first, but every gamepad action has a keyboard equiva
 | Y | Insert | Open the add-game flow (exe + artwork picker) |
 | Right stick | — | Moves the real system mouse cursor (no keyboard equivalent — just use the mouse) |
 | Right trigger | — | Left-click (no keyboard equivalent) |
-| Start | — | Toggle the in-game overlay (Return to Cartridge OS / Quit Game) |
-| — | Ctrl+Shift+O | Same as controller Start — toggles the overlay |
-| — | Alt+F4 | Closes the launcher window (doesn't quit — tray keeps running). Full quit is via the tray icon's Exit. Header also has on-screen Minimize/Close buttons, mouse-only. |
+| Guide / PS | — | Toggle the in-game overlay (Return to Cartridge OS / Quit Game) — controller-navigable once open, keyboard/mouse also work |
+| — | Ctrl+Shift+O | Same as controller Guide/PS — toggles the overlay |
+| Start | F4 | Opens the power menu: Exit to Desktop (closes the launcher window, tray keeps running), Shut Down Cartridge OS (full quit), Restart System, Turn Off System |
 
 Mouse works normally (click tiles, click the header buttons).
 

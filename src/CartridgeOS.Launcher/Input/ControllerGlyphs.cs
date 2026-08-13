@@ -11,6 +11,7 @@ public static class ControllerGlyphs
         (ControllerKind.Xbox, GamepadAction.Menu) => "Guide",
         (ControllerKind.Xbox, GamepadAction.ToggleSettings) => "View",
         (ControllerKind.Xbox, GamepadAction.ToggleSearch) => "X",
+        (ControllerKind.Xbox, GamepadAction.Power) => "Start",
 
         (ControllerKind.PlayStation, GamepadAction.Confirm) => "✕", // Cross
         (ControllerKind.PlayStation, GamepadAction.Back) => "○", // Circle
@@ -18,6 +19,7 @@ public static class ControllerGlyphs
         (ControllerKind.PlayStation, GamepadAction.Menu) => "PS",
         (ControllerKind.PlayStation, GamepadAction.ToggleSettings) => "Share",
         (ControllerKind.PlayStation, GamepadAction.ToggleSearch) => "□", // Square
+        (ControllerKind.PlayStation, GamepadAction.Power) => "Options",
 
         (_, GamepadAction.Confirm) => "1",
         (_, GamepadAction.Back) => "2",
@@ -25,6 +27,7 @@ public static class ControllerGlyphs
         (_, GamepadAction.Menu) => "Guide",
         (_, GamepadAction.ToggleSettings) => "Select",
         (_, GamepadAction.ToggleSearch) => "3",
+        (_, GamepadAction.Power) => "Start",
 
         _ => action.ToString(), // navigation actions have no glyph, just the enum name
     };

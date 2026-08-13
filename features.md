@@ -13,7 +13,7 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
   - **Wallpaper tab**: app-wide background source (selected game's artwork vs. a custom image) + file picker.
   - **Sound tab**: independent toggles for navigation sound and confirm sound.
 - Top nav bar (Home / Recently Played / Library) is a centered pill switcher — mouse click, keyboard, or gamepad L1/R1 (shoulder buttons) all work; switching crossfades rather than cutting instantly. Settings' own Library/Wallpaper/Screen Saver tabs fade in on switch the same way.
-- Header bar: logo, nav pills, and a status area (controller/device battery, real internet-reachability indicator, live search — Library only, clock, settings/minimize/close buttons).
+- Header bar: logo, nav pills, and a status area (controller/device battery, real internet-reachability indicator, live search — Library only, clock, settings button, and a power button opening the power menu).
 - A game's artwork zooms in briefly the moment it's launched, on every screen that can launch one (Library, Home carousel, Recently Played's hero card and 2x2 grid).
 
 ## Building your library
@@ -45,7 +45,8 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 
 ## In-game
 
-- **In-game overlay** — Ctrl+Shift+O or gamepad Guide/PS button, shows the running game's title with Return-to-launcher / Quit-game buttons. Works for directly-launched executables only (Steam/Xbox shell launches have no trackable process).
+- **In-game overlay** — Ctrl+Shift+O or gamepad Guide/PS button, shows the running game's title with Return-to-launcher / Quit-game buttons. Only ever toggles while a tracked game process is actually running. Fully controller-navigable while open (registers as a modal gamepad target: D-Pad Up/Down moves focus, Confirm activates, Back/Guide-PS closes) — not mouse-only. Re-asserts `Topmost` on open so it reliably appears above a windowed/borderless game without alt-tabbing first (true DirectX exclusive fullscreen is the one case this can't cover — bypasses the desktop compositor). Works for directly-launched executables only (Steam/Xbox shell launches have no trackable process).
+- **Power menu** — Start button, F4, or the header's power button: Exit to Desktop / Shut Down Cartridge OS / Restart System / Turn Off System, replacing the old bare minimize/close title-bar buttons. Fully controller-navigable (D-Pad or arrow keys move focus, Confirm/Enter activates, Back/Escape closes), on-screen glyphs match the connected controller brand.
 - **Discord Rich Presence** — shows "Playing {title}" while a game is running, including Steam/Xbox launches (just doesn't auto-clear on exit for those, since there's no exit signal to hook).
 - **"Launching..." tile indicator** — covers a tile the moment its launch is requested, so repeated clicks on a slow (especially shell-protocol) launch don't queue multiple attempts.
 - Launcher window minimizes automatically on every launch so it doesn't sit on top of the game.

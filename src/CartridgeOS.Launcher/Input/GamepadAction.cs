@@ -24,4 +24,8 @@ public enum GamepadAction
     /// <summary>Opens/closes the Library search box (Xbox X / PlayStation Square) — no-ops outside Library,
     /// same screen-scoping the mouse-driven search icon already has.</summary>
     ToggleSearch,
+
+    /// <summary>Opens/closes the power menu (Turn Off System / Restart System / Exit to Desktop / Shut
+    /// Down Cartridge OS) — Xbox Start button, previously unbound.</summary>
+    Power,
 }

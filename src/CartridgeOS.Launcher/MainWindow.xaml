@@ -246,10 +246,9 @@
 
                     <Button Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Command="{Binding ToggleSettingsCommand}"
                             Style="{StaticResource MinimizeButtonStyle}" ToolTip="Settings" Margin="8,0,0,0" />
-                    <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click"
-                            Style="{StaticResource MinimizeButtonStyle}" ToolTip="Minimize" />
-                    <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Close_Click"
-                            Style="{StaticResource CloseButtonStyle}" ToolTip="Exit" />
+                    <Button x:Name="PowerButton" Content="&#xE7E8;" FontFamily="Segoe MDL2 Assets" Click="Power_Click"
+                            Style="{StaticResource CloseButtonStyle}" ToolTip="Power (Start button / F4)"
+                            AutomationProperties.AutomationId="PowerButton" />
                 </StackPanel>
             </Grid>
 

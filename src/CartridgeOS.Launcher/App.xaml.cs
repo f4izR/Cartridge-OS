@@ -48,6 +48,10 @@ public partial class App : Application
     private GamepadWatcher? _gamepad;
     private MouseEmulator? _mouse;
     private ControllerKind? _currentController;
+
+    /// <summary>Read by MainWindow when opening the power menu, so its Confirm/Back prompts match the
+    /// controller actually connected (Xbox "A"/"B", PlayStation "✕"/"○", etc.) — see ControllerGlyphs.</summary>
+    internal ControllerKind? CurrentController => _currentController;
     private IGamepadInputTarget? _modalGamepadTarget;
     private GlobalHotkey? _overlayHotkey;
     private DiscordRichPresence? _discord;
@@ -281,6 +285,15 @@ public partial class App : Application
         _overlayWindow = new OverlayWindow(overlayVm);
         _overlayWindow.Closed += (_, _) => _overlayWindow = null;
         _overlayWindow.Show();
+
+        // Topmost="True" in XAML only affects z-order relative to other already-open windows — it
+        // doesn't forcibly steal the foreground game's spot. Re-toggling it after Show/Activate makes
+        // Windows actually re-apply topmost z-order now, which is what gets the overlay to appear
+        // without alt-tabbing away from the game first. (Won't help over true DirectX exclusive
+        // fullscreen — that bypasses the desktop compositor entirely; borderless/windowed games are fine.)
+        _overlayWindow.Activate();
+        _overlayWindow.Topmost = false;
+        _overlayWindow.Topmost = true;
     }
 
     private void CloseOverlay()
@@ -428,8 +441,9 @@ public partial class App : Application
         ShowLauncher(); // Steam-like: bring the launcher back automatically once the game closes
     }
 
-    /// <summary>Real quit — tears down every core-owned resource, not just the window.</summary>
-    private void ExitApplication()
+    /// <summary>Real quit — tears down every core-owned resource, not just the window. Also called by the
+    /// power menu's "Shut Down Cartridge OS" option, not just the tray icon.</summary>
+    internal void ExitApplication()
     {
         _singleInstancePipeCts?.Cancel();
         _idleTimer?.Stop();
