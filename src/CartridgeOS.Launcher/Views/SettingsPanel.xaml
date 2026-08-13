@@ -24,7 +24,11 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="TabControl">
                         <DockPanel>
-                            <TabPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
+                            <!-- StackPanel, not TabPanel: TabPanel wrap-flows items based on each one's
+                                 measured width, and the selected tab's FontWeight="SemiBold" widens it —
+                                 that reflow was shifting every tab's position on every selection change.
+                                 A vertical StackPanel positions purely by order, immune to width changes. -->
+                            <StackPanel DockPanel.Dock="Left" IsItemsHost="True" Width="130" Background="Transparent" />
                             <!-- x:Name reached from code-behind (SettingsPanel.xaml.cs's SelectionChanged
                                  handler) to fade this in on every tab switch — NOT an EventTrigger on
                                  Selector.SelectionChanged here, since several ComboBoxes inside the tab
@@ -130,6 +134,9 @@
                             <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseScanDirectoryCommand}"
                                     Style="{StaticResource PrimaryButtonStyle}" />
                         </Grid>
+                        <CheckBox Content="Scan whole drive (finds games installed a few folders deep, e.g. Riot Games\VALORANT — slower)"
+                                  IsChecked="{Binding IsRecursiveScan}" Foreground="{StaticResource TextSecondaryBrush}"
+                                  FontSize="12" Margin="0,0,0,8" />
                         <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
 

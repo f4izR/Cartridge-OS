@@ -2,11 +2,16 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Found Possible Games"
-        Width="520" Height="600"
+        Width="520" Height="640"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BackgroundBrush}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -17,29 +22,51 @@
                    Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
                    Text="These look like games but weren't found through a launcher — check the ones that actually are games before adding." />
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+        <!-- Picking a folder here re-scans immediately and replaces the list below with just that
+             folder's results (see ScanResultsViewModel.SelectedScanDirectory) — not merged with
+             whatever the previous directory turned up. -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Grid.Column="0" ItemsSource="{Binding ScanDirectories}"
+                      SelectedItem="{Binding SelectedScanDirectory}"
+                      IsEditable="False" Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseScanDirectoryCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+        </Grid>
+        <CheckBox Grid.Row="2" Content="Scan whole drive (finds games installed a few folders deep — slower)"
+                  IsChecked="{Binding IsRecursiveScan}" Foreground="{StaticResource TextSecondaryBrush}"
+                  FontSize="12" Margin="0,0,0,12" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,8">
             <Button Content="Select All" Command="{Binding SelectAllCommand}" Padding="10,4" Margin="0,0,8,0"
                     Background="{StaticResource SurfaceRaisedBrush}" Foreground="{StaticResource TextPrimaryBrush}" BorderThickness="0" />
             <Button Content="Unselect All" Command="{Binding UnselectAllCommand}" Padding="10,4"
                     Background="{StaticResource SurfaceRaisedBrush}" Foreground="{StaticResource TextPrimaryBrush}" BorderThickness="0" />
         </StackPanel>
 
-        <ListBox Grid.Row="2" ItemsSource="{Binding Candidates}"
-                 Background="{StaticResource SurfaceBrush}" BorderThickness="0">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Margin="4">
-                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <StackPanel>
-                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding ExecutablePath}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+        <Grid Grid.Row="4">
+            <ListBox ItemsSource="{Binding Candidates}"
+                     Background="{StaticResource SurfaceBrush}" BorderThickness="0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="4">
+                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding ExecutablePath}" Foreground="{StaticResource TextMutedBrush}" FontSize="11" />
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="Scanning..." HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextMutedBrush}" Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}" />
+        </Grid>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="Cancel" Click="Cancel_Click" Padding="16,8" Margin="0,0,10,0"
                     Background="{StaticResource SurfaceRaisedBrush}" Foreground="{StaticResource TextPrimaryBrush}" BorderThickness="0" />
             <Button Content="Add Selected" Click="AddSelected_Click" Style="{StaticResource PrimaryButtonStyle}" />

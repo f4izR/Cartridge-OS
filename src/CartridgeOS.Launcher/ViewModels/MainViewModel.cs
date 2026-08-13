@@ -410,6 +410,17 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _selectedScanDirectory, value);
     }
 
+    private bool _isRecursiveScan;
+    /// <summary>"Scan whole drive" mode — walks the entire subtree under SelectedScanDirectory (e.g. an
+    /// actual drive root like "D:\") instead of just its immediate children, so games installed a few
+    /// folders deep (Riot Games\VALORANT\live\VALORANT.exe) are still found. Slower, opt-in, UI-only
+    /// (not persisted) — see StandaloneExecutableScanner.ScanRecursive.</summary>
+    public bool IsRecursiveScan
+    {
+        get => _isRecursiveScan;
+        set => SetProperty(ref _isRecursiveScan, value);
+    }
+
     private ImageSource? _customWallpaperImage;
     public ImageSource? CustomWallpaperImage
     {
@@ -800,16 +811,23 @@ public sealed class MainViewModel : ViewModelBase
     {
         var dialog = new OpenFolderDialog { Title = "Select a folder to scan for games" };
         if (dialog.ShowDialog() != true) return;
+        AddScanDirectory(dialog.FolderName);
+    }
 
-        _settings.ScanDirectories.RemoveAll(d => string.Equals(d, dialog.FolderName, StringComparison.OrdinalIgnoreCase));
-        _settings.ScanDirectories.Insert(0, dialog.FolderName);
+    /// <summary>Adds (or re-promotes) a folder to the front of the scan-directory MRU list, persists it, and
+    /// selects it — shared by the Settings picker and the scan-results window's own picker (passed down as a
+    /// callback, see FindMoreGamesAsync) so both stay in sync with the same underlying list/selection.</summary>
+    private void AddScanDirectory(string path)
+    {
+        _settings.ScanDirectories.RemoveAll(d => string.Equals(d, path, StringComparison.OrdinalIgnoreCase));
+        _settings.ScanDirectories.Insert(0, path);
         if (_settings.ScanDirectories.Count > MaxScanDirectories)
             _settings.ScanDirectories.RemoveRange(MaxScanDirectories, _settings.ScanDirectories.Count - MaxScanDirectories);
         SettingsStore.Save(_settings);
 
         ScanDirectories.Clear();
         foreach (var dir in _settings.ScanDirectories) ScanDirectories.Add(dir);
-        SelectedScanDirectory = dialog.FolderName;
+        SelectedScanDirectory = path;
     }
 
     /// <summary>Plain single-folder picker, no MRU list — used by the screen saver's images/music overrides
@@ -872,32 +890,43 @@ public sealed class MainViewModel : ViewModelBase
     // synchronously on the UI thread like the other heuristic scan used to would freeze the window.
     private async Task FindMoreGamesAsync()
     {
-        var existingExePaths = new HashSet<string>(Games.Select(g => g.ExecutablePath), StringComparer.OrdinalIgnoreCase);
-        // A picked directory (SelectedScanDirectory) replaces the default Program-Files/drives sweep entirely —
-        // once you're pointing it at where your games actually live, scanning C:\Program Files too is just noise.
-        // XboxScanner is unaffected either way; it queries installed packages, not a filesystem path.
         var directoryToScan = SelectedScanDirectory;
-        var candidates = await Task.Run(() =>
-        {
-            var standalone = directoryToScan is null
-                ? new StandaloneExecutableScanner().Scan()
-                : new StandaloneExecutableScanner().Scan([directoryToScan]);
-            return standalone
-                .Concat(new XboxScanner().Scan())
-                .Where(g => !existingExePaths.Contains(g.ExecutablePath))
-                .ToList();
-        });
+        var recursive = IsRecursiveScan;
+        var candidates = await ScanCandidatesAsync(directoryToScan, recursive);
 
-        if (candidates.Count == 0)
-        {
-            MessageBox.Show("No new games found.", "Cartridge OS", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var resultsViewModel = new ScanResultsViewModel(candidates);
+        // No early-return on an empty first scan — the window now owns its own directory picker (see
+        // ScanResultsViewModel), so opening it even with zero initial results lets the user pick a
+        // different folder right there instead of bouncing back to Settings and re-clicking this button.
+        var resultsViewModel = new ScanResultsViewModel(candidates, ScanDirectories, directoryToScan, recursive, ScanCandidatesAsync, AddScanDirectory);
         var window = new ScanResultsWindow { DataContext = resultsViewModel, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() == true)
             ImportScannedGames(resultsViewModel.SelectedGames);
+    }
+
+    /// <summary>Standalone-exe candidates not already in the library, scoped to one directory when given
+    /// (replaces the default Program-Files/drives sweep entirely — once you're pointing it at where your
+    /// games actually live, scanning C:\Program Files too is just noise) or the default sweep otherwise.
+    /// recursive selects StandaloneExecutableScanner.ScanRecursive (walks the whole subtree, needed for
+    /// games installed a few folders deep, e.g. Riot Games\VALORANT) instead of the shallow one-level Scan
+    /// — meaningless (and ignored) when directory is null, since the default sweep's roots are Program
+    /// Files itself, not something you'd want to recurse. XboxScanner (shell:appsFolder\... results —
+    /// installed packages, not filesystem paths, so no directory could ever scope it) only runs for the
+    /// default (no-directory) scan — a picked directory means "show me what's in this folder," not "also
+    /// show me every Xbox/Store app regardless of where I pointed this."
+    /// Shared by the initial "Find More Games" scan and the scan-results window's own re-scan-on-change.</summary>
+    private async Task<List<Game>> ScanCandidatesAsync(string? directory, bool recursive)
+    {
+        var existingExePaths = new HashSet<string>(Games.Select(g => g.ExecutablePath), StringComparer.OrdinalIgnoreCase);
+        return await Task.Run(() =>
+        {
+            var scanner = new StandaloneExecutableScanner();
+            var standalone = directory is null ? scanner.Scan()
+                : recursive ? scanner.ScanRecursive([directory])
+                : scanner.Scan([directory]);
+            return (directory is null ? standalone.Concat(new XboxScanner().Scan()) : standalone)
+                .Where(g => !existingExePaths.Contains(g.ExecutablePath))
+                .ToList();
+        });
     }
 
     private void ImportScannedGames(IEnumerable<Game> scannedGames)
