@@ -10,11 +10,23 @@ namespace CartridgeOS.Core.Scanning;
 /// </summary>
 public sealed class SteamScanner
 {
+    // appmanifest_*.acf doesn't expose an app "type" (that only lives in Steam's binary appinfo.vdf
+    // cache), so there's no general way to tell a redistributable/tool from a real game locally. 228980
+    // ("Steamworks Common Redistributables") is a fixed, well-known exception present in almost every
+    // Steam library regardless of what the user actually owns — worth excluding by name since it's not
+    // something anyone would ever want to see as a "game" tile.
+    private const string SteamworksCommonRedistributablesAppId = "228980";
+
     public List<Game> Scan()
     {
         string? steamPath = FindSteamInstallPath();
         if (steamPath is null) return [];
 
+        // A library folder can legitimately show up more than once (e.g. libraryfolders.vdf listing the
+        // main Steam install path again alongside the paths already seeded into FindLibraryPaths' set),
+        // which previously produced duplicate tiles for the same game — dedupe by appid to guarantee one
+        // entry per install regardless of how many times its manifest was found.
+        var seenAppIds = new HashSet<string>();
         var games = new List<Game>();
         foreach (var libraryPath in FindLibraryPaths(steamPath))
         {
@@ -25,6 +37,8 @@ public sealed class SteamScanner
             {
                 var (appId, name) = SteamVdf.ExtractAppState(File.ReadAllText(manifestFile));
                 if (appId is null || name is null) continue;
+                if (appId == SteamworksCommonRedistributablesAppId) continue;
+                if (!seenAppIds.Add(appId)) continue;
 
                 games.Add(new Game
                 {

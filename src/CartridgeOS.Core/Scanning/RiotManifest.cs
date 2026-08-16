@@ -26,8 +26,11 @@ public static class RiotManifest
 
             foreach (var entry in associatedEl.EnumerateObject())
             {
-                string installPath = entry.Name.Replace('/', Path.DirectorySeparatorChar);
-                string title = new DirectoryInfo(installPath.TrimEnd('\\')).Name;
+                // entry.Name is the install path, e.g. "E:/Riot Games/VALORANT/live/" or
+                // "C:/Riot Games/League of Legends/Game/" — the leaf folder ("live"/"Game") is just the
+                // client/runtime subfolder, not the game's name, so climb past it (see
+                // ExecutableHeuristics.ResolveTitleFromPath) instead of taking it at face value.
+                string title = ExecutableHeuristics.ResolveTitleFromPath(entry.Name);
                 if (string.IsNullOrEmpty(title)) continue;
 
                 // Games launch through the Riot Client itself, not a per-game exe — it handles auth/patching first.

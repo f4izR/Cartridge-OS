@@ -10,13 +10,15 @@ namespace CartridgeOS.Launcher.Services;
 /// </summary>
 public static class RiotManifestSelfCheck
 {
+    // Matches Riot's real on-disk format: the key is the per-game install path (ending in the client/
+    // runtime subfolder — "Game" for LoL, "live" for VALORANT), the value is always the shared client exe.
     private const string SampleManifest = """
         {
             "rc_default": "C:/Riot Games/Riot Client/RiotClientServices.exe",
             "rc_live": "C:/Riot Games/Riot Client/RiotClientServices.exe",
             "associated_client": {
-                "C:/Riot Games/League of Legends/": "live",
-                "C:/Riot Games/VALORANT/": "live"
+                "C:/Riot Games/League of Legends/Game/": "C:/Riot Games/Riot Client/RiotClientServices.exe",
+                "C:/Riot Games/VALORANT/live/": "C:/Riot Games/Riot Client/RiotClientServices.exe"
             }
         }
         """;
