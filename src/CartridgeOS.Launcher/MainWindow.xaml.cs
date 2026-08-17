@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
@@ -69,6 +70,22 @@ public partial class MainWindow : Window
         {
             vm.StopBackgroundRescanning();
             vm.StopStatusUpdates();
+        };
+
+        // Topmost="True" (XAML) keeps this window above every other non-topmost window regardless of
+        // which one actually has focus — that's the whole point for the console-dashboard look, but it
+        // means alt-tabbing to (or clicking the taskbar icon for) an ordinary app like Chrome left that
+        // app's window rendering *behind* this one, with no visible way to actually reach it (reported by
+        // user testing). Minimizing on Deactivated fixes that the same way launching a game already does
+        // (see App.LaunchGame) — a minimized Topmost window doesn't render, so whatever the user just
+        // switched to becomes visible. Guarded to same-process only: this window also "deactivates" when
+        // one of its own child dialogs (PowerMenuWindow, ArtworkCropWindow, ScanResultsWindow) opens, and
+        // minimizing out from under an owned dialog would be exactly the wrong thing to do there.
+        Deactivated += (_, _) =>
+        {
+            if (WindowState == WindowState.Minimized) return;
+            if (IsForegroundWindowInThisProcess()) return;
+            WindowState = WindowState.Minimized;
         };
 
         // Keyboard equivalents of gamepad nav/A/Y — don't rely on native ListBox/VirtualizingWrapPanel arrow-key
@@ -272,5 +289,18 @@ public partial class MainWindow : Window
     {
         if (game is null) return;
         ((App)Application.Current).LaunchGame(vm, game);
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    /// <summary>True if whatever's currently in the foreground (or nothing — 0 while a window is
+    /// mid-transition) belongs to this same process, e.g. one of our own dialogs taking focus.</summary>
+    private static bool IsForegroundWindowInThisProcess()
+    {
+        IntPtr foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero) return true;
+        GetWindowThreadProcessId(foreground, out uint processId);
+        return processId == Environment.ProcessId;
     }
 }
