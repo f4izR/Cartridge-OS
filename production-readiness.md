@@ -15,7 +15,7 @@ Triage of the checklist below by actual severity, done when asked "if this goes 
 
 **Should-fix before calling it done:**
 - Only Steam, Riot, EA, and the standalone/Xbox scanners have been checked against real installs (2026-08-16) — GOG, Ubisoft, Battle.net, and Epic are still unverified against anything real. See Testing.
-- Named-pipe IPC has no message validation/sanitization yet (Service trusts Launcher input blindly). See Security.
+- ~~Named-pipe IPC has no message validation/sanitization yet~~ — **fixed 2026-08-17**, see Security.
 - No memory profiling on the long-running Service, no check that the artwork cache doesn't grow unbounded, no test with a large (500+) game library. See Performance.
 - ~~"Graceful handling of a game that fails to launch" isn't built~~ — **fixed 2026-08-17**, see Reliability.
 
@@ -42,8 +42,8 @@ Triage of the checklist below by actual severity, done when asked "if this goes 
 - [ ] Memory profiled for leaks in long-running Service (runs continuously)
 
 ## Security
-- [ ] Named-pipe IPC validates/sanitizes messages (don't trust Launcher input blindly in Service)
-- [ ] No arbitrary command execution beyond configured game launch paths
+- [x] Named-pipe IPC validates/sanitizes messages — **fixed 2026-08-17**: `CartridgeOsPipeServer` (`Core/Ipc/CartridgeOsPipeServer.cs`) now (1) creates the pipe with an explicit ACL restricting access to Authenticated Users, so anonymous/guest logons on the same machine can no longer connect at all — previously the pipe had the OS default ACL, and this will matter more once the Service is actually installed and runs as LocalSystem; (2) rejects a request outright (before it ever reaches `handleRequest`) if `Command` is empty/whitespace/over 256 chars or `Payload` is over 4KB — sized to what every real command today actually needs (short fixed strings, no payload), not to `PipeFraming`'s 10MB framing-safety cap. Both processes' pipes go through this same server class, so Service and single-instance-signaling get the fix for free.
+- [x] No arbitrary command execution beyond configured game launch paths — **checked 2026-08-17, already true**: the Service's command switch (`Worker.HandleRequest`) only exposes `Ping`/`GetGameCount`, and the only thing that ever calls `Process.Start` on IPC-adjacent code is game launching itself, which always reads `ExecutablePath` from the local SQLite DB, never from a pipe message.
 - [ ] SQLite DB not writable by untrusted processes in a way that leads to code exec
 - [ ] Hardcoded API keys (SteamGridDB, TheGamesDB) and Discord Client ID ship inside the compiled DLL of every install (`Core/Scanning/ArtworkFetcher.cs`, `Services/DiscordRichPresence.cs`) — deliberate tradeoff for a closed-source app (env vars would buy no real protection and add a setup step, see context.md's "Branding assets" section for the full reasoning), but means a leaked/abused/rate-limited key can only be rotated by shipping a new build, not by revoking it server-side. Revisit if this project is ever open-sourced.
 
