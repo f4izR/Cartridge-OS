@@ -67,8 +67,32 @@ public partial class App : Application
     private DateTime _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo (IdleDetector) never sees gamepad input, so this is tracked separately
     private ScreenSaverWindow? _screenSaverWindow;
 
+    // No logging framework exists anywhere in this app — before this, an unhandled exception left zero
+    // trail, just a generic Windows "stopped working" dialog. One append-only text file is enough to
+    // turn a user's crash report into something debuggable.
+    private static readonly string CrashLogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CartridgeOS", "crash.log");
+
+    private static void LogCrash(string source, Exception? ex)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CrashLogPath)!);
+            File.AppendAllText(CrashLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}: {ex}\n\n");
+        }
+        catch
+        {
+            // logging must never throw during crash handling
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Best-effort: log and let the process die rather than try to keep running on corrupted state.
+        DispatcherUnhandledException += (_, args) => LogCrash("DispatcherUnhandledException", args.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => LogCrash("UnhandledException", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) => { LogCrash("UnobservedTaskException", args.Exception); args.SetObserved(); };
+
         var selfCheck = SelfChecks.Keys.FirstOrDefault(e.Args.Contains);
         if (selfCheck is not null)
         {
@@ -332,7 +356,6 @@ public partial class App : Application
 
     public void LaunchGame(MainViewModel vm, GameTileViewModel game)
     {
-        // ponytail: no launch-failure UI yet (missing exe, permissions) — add when game launching is its own task.
         if (string.IsNullOrEmpty(game.ExecutablePath)) return;
         if (game.IsLaunching) return; // already launching this one — the whole point of this indicator is to stop repeat clicks here
 
@@ -354,15 +377,26 @@ public partial class App : Application
             WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath) ?? "",
         };
         Process? process;
+        bool launchFailed = false;
         try
         {
             process = Process.Start(startInfo);
         }
         catch (Exception ex) when (ex is Win32Exception or FileNotFoundException)
         {
-            // ponytail: no launch-failure UI yet (bad path, permissions) — surfacing this properly is its
-            // own task. Treated the same as a shell launch below (no process to track) rather than crashing.
             process = null;
+            launchFailed = true;
+        }
+
+        if (launchFailed)
+        {
+            // Bad exe path or permissions — nothing was actually launched, so don't minimize, don't set
+            // Discord presence, and clear the indicator immediately rather than waiting out the
+            // shell-launch timeout. Surfaced via the existing tray balloon (visible even over the
+            // fullscreen launcher) since there's no in-window toast mechanism.
+            game.IsLaunching = false;
+            _trayIcon?.ShowBalloonTip("Couldn't launch " + game.Title, "The game's executable is missing or you don't have permission to run it.", BalloonIcon.Error);
+            return;
         }
 
         // Doesn't need the Process handle, so this runs even for Steam/Xbox shell launches (where

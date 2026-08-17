@@ -2,7 +2,7 @@
 
 What's left before this ships to a real user's PC, beyond feature completion. Update as items are closed or new gaps are found.
 
-## Current assessment (2026-08-16): not production-ready
+## Current assessment (2026-08-17): not production-ready
 
 Triage of the checklist below by actual severity, done when asked "if this goes to production is everything fine?" — not a new checklist, just prioritization of what's already tracked.
 
@@ -10,14 +10,14 @@ Triage of the checklist below by actual severity, done when asked "if this goes 
 - No physical controller has ever tested this app, despite it being marketed as controller-first — XInput/PlayStation mapping, right-stick mouse emulation, deadzones, the whole input layer is verified only by code inspection and self-checks. The single riskiest gap given the app's core pitch. See "Controller compatibility tested" under Testing.
 - No installer — no MSI/MSIX/Inno Setup, no autostart registration, no clean uninstall. Right now "shipping" means handing someone a folder of exes. See Packaging & install.
 - No code signing — every launch will trigger Windows SmartScreen warnings, which reads as malware to most users. See Packaging & install.
-- No crash recovery — if the Service crashes there's no restart policy; if the Launcher crashes in fullscreen controller mode, there's no documented fallback to get a mouse/keyboard back. See Reliability.
+- No crash recovery — **narrowed 2026-08-17**: the Service is now SCM-controllable (`AddWindowsService()`), so a restart-on-crash policy is installable, but nothing configures it yet since there's no installer to run `sc failure`. The Launcher-crash/no-mouse-keyboard half of this was checked and isn't a real gap (see Reliability) — remaining blocker here is purely "no installer to set the SCM restart policy," which folds into the installer item below rather than being separate.
 - API keys (SteamGridDB, TheGamesDB) and the Discord Client ID are hardcoded into the shipped DLL — a deliberate, reasoned tradeoff for a closed-source app (see context.md's "Branding assets"/`ArtworkFetcher.cs` notes), but worth flagging before wider distribution: no way to rotate a leaked/abused key without shipping a new build. Not previously tracked here — added as a new Security item below.
 
 **Should-fix before calling it done:**
 - Only Steam, Riot, EA, and the standalone/Xbox scanners have been checked against real installs (2026-08-16) — GOG, Ubisoft, Battle.net, and Epic are still unverified against anything real. See Testing.
 - Named-pipe IPC has no message validation/sanitization yet (Service trusts Launcher input blindly). See Security.
 - No memory profiling on the long-running Service, no check that the artwork cache doesn't grow unbounded, no test with a large (500+) game library. See Performance.
-- "Graceful handling of a game that fails to launch" isn't built — a bad exe path or permissions issue has no defined user-facing behavior yet. See Reliability.
+- ~~"Graceful handling of a game that fails to launch" isn't built~~ — **fixed 2026-08-17**, see Reliability.
 
 **Lower risk / polish:**
 - No auto-update mechanism (may be an intentional V1 decision, not necessarily a blocker). See Packaging & install.
@@ -30,10 +30,10 @@ Triage of the checklist below by actual severity, done when asked "if this goes 
 - [ ] Auto-update mechanism (or explicit decision to skip for V1)
 
 ## Reliability
-- [ ] Service crash recovery / restart policy
-- [ ] Launcher crash doesn't take down the Service or leave the machine unusable (no keyboard/mouse in fullscreen controller mode)
-- [ ] Graceful handling of games that fail to launch (missing exe, permissions)
-- [ ] Named-pipe reconnect logic if Launcher starts before Service is ready
+- [~] Service crash recovery / restart policy — **2026-08-17**: Service now calls `AddWindowsService()` (`Program.cs`) so it's SCM-controllable once installed; the actual restart-on-crash policy is an `sc failure CartridgeOS reset=...` call the installer still needs to make (no installer exists yet, see Packaging & install). Also added a global crash handler + append-only crash log (`%LocalAppData%\CartridgeOS\crash.log`) to the Launcher (`App.xaml.cs`) — previously zero diagnostic trail existed for any unhandled exception in either process.
+- [x] Launcher crash doesn't take down the Service or leave the machine unusable — **checked 2026-08-17, not actually a gap**: separate OS processes (a Launcher crash can't touch the Service), and Windows' own crash dialog renders above topmost/fullscreen windows fine, so a crash doesn't strand the user without mouse/keyboard. No code needed here.
+- [x] Graceful handling of games that fail to launch (missing exe, permissions) — **fixed 2026-08-17**: `App.LaunchGame` (`App.xaml.cs`) now distinguishes a real launch failure (Win32Exception/FileNotFoundException) from a legitimate Steam/Xbox shell launch (both previously returned `process is null`), clears the "Launching..." indicator immediately instead of minimizing the window, and surfaces the failure via the existing tray balloon tip instead of failing silently.
+- [x] Named-pipe reconnect logic if Launcher starts before Service is ready — **checked 2026-08-17, not actually a gap**: `CartridgeOsPipeClient.SendAsync` already never throws (returns `null` on any connection failure), and nothing on the Launcher's real startup/runtime path depends on the Service's pipe — only the `--ipc-ping` diagnostic and cross-instance signaling do, both of which already handle a `null` response. No retry logic needed unless the Service becomes load-bearing for real functionality later.
 
 ## Performance
 - [ ] Cold boot time to fullscreen UI measured and acceptable
