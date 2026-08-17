@@ -37,6 +37,15 @@ public static class ArtworkFetcher
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
+    // Every caller fires fetches fire-and-forget in a loop (startup load, post-scan import) with no
+    // concurrency limit of its own — fine for a handful of new games, but a 500+ game library with no
+    // local artwork would otherwise fire that many concurrent requests at once on cold boot, both
+    // needlessly hammering SteamGridDB/TheGamesDB (tripping rate limits far earlier than necessary) and
+    // spiking network/thread usage right when cold-boot time matters most. Caps real concurrent network
+    // work across every caller; a full cache hit (the common case for a returning user) never touches
+    // this at all, see the early-return above the gated section in each method below.
+    private static readonly SemaphoreSlim ConcurrencyGate = new(4);
+
     private static readonly string CacheDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "CartridgeOS", "ArtworkCache", "downloaded");
@@ -54,37 +63,45 @@ public static class ArtworkFetcher
             return cachePath;
         }
 
-        string? sourceUrl;
-        if (TryGetSteamAppId(game.ExecutablePath, out string appId))
-        {
-            sourceUrl = $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg";
-        }
-        else
-        {
-            var settings = SettingsStore.Load();
-            sourceUrl = await FindSteamGridDbUrlAsync(game.Title, EffectiveSteamGridDbApiKey(settings))
-                ?? await FindTheGamesDbUrlAsync(game.Title, EffectiveTheGamesDbApiKey(settings));
-        }
-
-        if (sourceUrl is null)
-        {
-            Log($"{game.Title}: no source URL found from any source");
-            return null;
-        }
-
-        Log($"{game.Title}: downloading {sourceUrl}");
+        await ConcurrencyGate.WaitAsync();
         try
         {
-            byte[] bytes = await Http.GetByteArrayAsync(sourceUrl);
-            Directory.CreateDirectory(CacheDir);
-            await File.WriteAllBytesAsync(cachePath, bytes);
-            Log($"{game.Title}: saved to {cachePath} ({bytes.Length} bytes)");
-            return cachePath;
+            string? sourceUrl;
+            if (TryGetSteamAppId(game.ExecutablePath, out string appId))
+            {
+                sourceUrl = $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg";
+            }
+            else
+            {
+                var settings = SettingsStore.Load();
+                sourceUrl = await FindSteamGridDbUrlAsync(game.Title, EffectiveSteamGridDbApiKey(settings))
+                    ?? await FindTheGamesDbUrlAsync(game.Title, EffectiveTheGamesDbApiKey(settings));
+            }
+
+            if (sourceUrl is null)
+            {
+                Log($"{game.Title}: no source URL found from any source");
+                return null;
+            }
+
+            Log($"{game.Title}: downloading {sourceUrl}");
+            try
+            {
+                byte[] bytes = await Http.GetByteArrayAsync(sourceUrl);
+                Directory.CreateDirectory(CacheDir);
+                await File.WriteAllBytesAsync(cachePath, bytes);
+                Log($"{game.Title}: saved to {cachePath} ({bytes.Length} bytes)");
+                return cachePath;
+            }
+            catch (HttpRequestException ex)
+            {
+                Log($"{game.Title}: download failed — {ex.Message}");
+                return null; // 404 (no art for this appid/title) or network issue — keep the placeholder tile
+            }
         }
-        catch (HttpRequestException ex)
+        finally
         {
-            Log($"{game.Title}: download failed — {ex.Message}");
-            return null; // 404 (no art for this appid/title) or network issue — keep the placeholder tile
+            ConcurrencyGate.Release();
         }
     }
 
@@ -310,6 +327,18 @@ public static class ArtworkFetcher
         {
             Log($"{title}: TheGamesDB request failed — {ex.Message}");
             return null;
+        }
+    }
+
+    /// <summary>Deletes the downloaded boxart/hero originals cached for a game — called when a game is
+    /// removed so this cache doesn't grow unbounded as games come and go (see production-readiness.md's
+    /// "artwork cache doesn't grow unbounded" item). No-op for a game whose art was never fetched.</summary>
+    public static void PurgeCache(string title, int id)
+    {
+        foreach (string suffix in new[] { "", "_hero" })
+        {
+            string path = Path.Combine(CacheDir, $"{Sanitize(title)}_{id}{suffix}.jpg");
+            try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
         }
     }
 

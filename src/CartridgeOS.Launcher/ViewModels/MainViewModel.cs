@@ -748,6 +748,12 @@ public sealed class MainViewModel : ViewModelBase
         Games.Remove(game);
         SelectedGame = Games.FirstOrDefault();
         RebuildRecentGames();
+
+        // Otherwise this game's cache entries (downloaded boxart/hero originals, decoded-size variants)
+        // just linger on disk forever with nothing left to ever reference or clean them up again.
+        ArtworkFetcher.PurgeCache(game.Title, game.Id);
+        ArtworkCache.PurgeCacheFor(game.ArtworkPath);
+        ArtworkCache.PurgeCacheFor(game.HeroImagePath);
     }
 
     // Tile artwork slot is ~2:3 portrait (matches ArtworkCropWindow's crop viewport, and the box-art

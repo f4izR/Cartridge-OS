@@ -45,6 +45,21 @@ public static class ArtworkCache
         return Path.Combine(CacheDir, $"{hash}_{decodePixelWidth}.png");
     }
 
+    /// <summary>Deletes every decoded-size variant cached for a source path (tile width, background
+    /// width, any future width) — called when a game is removed so its cache entries don't linger
+    /// forever (see production-readiness.md's "artwork cache doesn't grow unbounded" item). Globs by
+    /// hash prefix rather than a specific width so this doesn't need updating if a new decode width
+    /// is ever added elsewhere.</summary>
+    public static void PurgeCacheFor(string? sourcePath)
+    {
+        if (string.IsNullOrEmpty(sourcePath) || !Directory.Exists(CacheDir)) return;
+        string hash = Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(sourcePath)));
+        foreach (string file in Directory.GetFiles(CacheDir, $"{hash}_*.png"))
+        {
+            try { File.Delete(file); } catch (IOException) { }
+        }
+    }
+
     private static void ResizeAndSave(string sourcePath, string cachePath, int decodePixelWidth)
     {
         var decoded = LoadFrozen(sourcePath, decodePixelWidth);
