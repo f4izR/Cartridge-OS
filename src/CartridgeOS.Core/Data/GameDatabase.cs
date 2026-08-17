@@ -1,4 +1,6 @@
 using Microsoft.Data.Sqlite;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using CartridgeOS.Core.Models;
 
 namespace CartridgeOS.Core.Data;
@@ -9,6 +11,8 @@ public sealed class GameDatabase
 
     public GameDatabase(string dbPath)
     {
+        SecureDataDirectory(Path.GetDirectoryName(dbPath)!);
+
         _connectionString = $"Data Source={dbPath}";
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
@@ -32,6 +36,39 @@ public sealed class GameDatabase
         AddColumnIfMissing(connection, "TotalPlaytimeMinutes", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "HeroImagePath", "TEXT");
     }
+
+    // This directory also holds settings.json, the artwork cache, and every *.log file — GameDatabase
+    // isn't really "the" owner of it, but its constructor runs first in both the Launcher and Service
+    // startup paths, so this is the one guaranteed place to harden it before anything else gets written
+    // there. Restricts to the current user + Administrators + SYSTEM, dropping whatever ACL the folder
+    // would otherwise inherit — relevant on a shared/couch-gaming PC with multiple standard-user Windows
+    // accounts. Only affects the directory (and anything created in it afterward); a pre-existing games.db
+    // from before this change keeps its old file-level ACL until rewritten. Best-effort: SQLite itself
+    // still works if this fails (e.g. a non-NTFS volume), it just means no extra hardening happened.
+    private static void SecureDataDirectory(string dir)
+    {
+        var info = Directory.CreateDirectory(dir);
+        try
+        {
+            var security = new DirectorySecurity();
+            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+
+            var currentUser = WindowsIdentity.GetCurrent().User;
+            if (currentUser is not null) security.AddAccessRule(FullControlRule(currentUser));
+            security.AddAccessRule(FullControlRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null)));
+            security.AddAccessRule(FullControlRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null)));
+
+            info.SetAccessControl(security);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException)
+        {
+            // best-effort — leave whatever ACL the directory already has
+        }
+    }
+
+    private static FileSystemAccessRule FullControlRule(IdentityReference identity) => new(
+        identity, FileSystemRights.FullControl,
+        InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow);
 
     private static void AddColumnIfMissing(SqliteConnection connection, string columnName, string columnDefinition)
     {
