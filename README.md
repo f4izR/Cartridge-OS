@@ -160,6 +160,9 @@ dotnet run --project src/CartridgeOS.Launcher
 
 # Run the background service (hosts a named-pipe IPC server; scanning/controller ownership hasn't moved here yet — see context.md)
 dotnet run --project src/CartridgeOS.Service
+
+# Run the automated test suite (xUnit) — wraps every self-check below as a [Fact], see src/CartridgeOS.Tests
+dotnet test
 ```
 
 ### Testing without a controller
@@ -180,6 +183,8 @@ The Launcher is controller-first, but every gamepad action has a keyboard equiva
 Mouse works normally (click tiles, click the header buttons).
 
 ### Self-checks
+
+`dotnet test` (`src/CartridgeOS.Tests`) is now the primary way to run these — one xUnit `[Fact]` per check below, discoverable/runnable by any .NET test runner or CI, all green/red in one run instead of one exit code per manual invocation. The individual `--self-check-*` CLI flags below still work unchanged (same `Run()` methods, just invoked a different way) for a quick one-off check without pulling in the test SDK:
 
 ```powershell
 # Verifies the artwork decode/cache pipeline (generates a temp image, checks decode width + cache hit/miss). Exits 0/1.

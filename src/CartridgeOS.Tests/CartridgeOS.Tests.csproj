@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Matches CartridgeOS.Launcher's TFM (not just net10.0) — the self-checks under test use WPF
+         types (ArtworkCacheSelfCheck's BitmapImage/DrawingVisual) and Win32 P/Invoke, both of which
+         need the Windows-flavored TFM + UseWPF below, not just a plain net10.0 class library. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CartridgeOS.Launcher\CartridgeOS.Launcher.csproj" />
+  </ItemGroup>
+
+  <!-- SoundServiceSelfCheck reads Assets\Sounds\*.wav relative to AppContext.BaseDirectory, which is
+       this test project's own output folder when run from here, not the Launcher's — so the same
+       files need copying into this project's output too. -->
+  <ItemGroup>
+    <Content Include="..\CartridgeOS.Launcher\Assets\Sounds\*.wav" LinkBase="Assets\Sounds">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
