@@ -100,10 +100,10 @@ public partial class MainWindow : Window
                 Key.Down => GamepadAction.NavigateDown,
                 Key.Enter or Key.Space => GamepadAction.Confirm,
                 Key.Insert => GamepadAction.Secondary,
-                Key.Apps => GamepadAction.Menu, // the Windows "context menu" key — keyboard equivalent of gamepad Menu/Start/Options
+                Key.Apps => GamepadAction.Menu, // the Windows "context menu" key — keyboard equivalent of gamepad Menu/Options button
                 Key.Escape => GamepadAction.Back,
                 Key.Tab => GamepadAction.ToggleSettings,
-                Key.F4 => GamepadAction.Power, // keyboard equivalent of the controller Start button
+                Key.F4 => GamepadAction.Power, // keyboard equivalent of the controller Guide/Xbox/PS button
                 _ => null,
             };
             if (!action.HasValue) return;
@@ -241,9 +241,10 @@ public partial class MainWindow : Window
         vm.SelectedScreen = screens[(index + direction + screens.Length) % screens.Length];
     }
 
-    /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Start/Options
-    /// equivalent of right-clicking a tile. Only reachable when no game is running (App intercepts Menu for the
-    /// in-game overlay toggle in that case instead — see App.OnGamepadAction).</summary>
+    /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Options
+    /// equivalent of right-clicking a tile (Xbox "Menu"/hamburger button, PS "Options" button). Effectively only
+    /// reachable when no game is running — the window is minimized while a game runs (App.LaunchSelected), and
+    /// HandleGamepadAction's minimized-window guard above no-ops every action in that state, this one included.</summary>
     private void OpenGameContextMenu(MainViewModel vm)
     {
         if (vm.SelectedGame is null) return;

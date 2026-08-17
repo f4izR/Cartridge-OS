@@ -23,6 +23,7 @@ public sealed class DiscordRichPresence : IDisposable
 
     private NamedPipeClientStream? _pipe;
     private bool _ready;
+    private readonly DateTimeOffset _appStartedAtUtc = DateTimeOffset.UtcNow;
 
     public async Task ConnectAsync()
     {
@@ -64,6 +65,9 @@ public sealed class DiscordRichPresence : IDisposable
             }
 
             _ready = true;
+            // Without this, Discord shows nothing at all until a game is actually launched (and reverts to
+            // nothing the moment it exits) — the app itself never had any presence of its own.
+            await SetIdleActivityAsync().ConfigureAwait(false);
         }
         catch (IOException ex)
         {
@@ -72,14 +76,30 @@ public sealed class DiscordRichPresence : IDisposable
         }
     }
 
+    // Key name of the uploaded Rich Presence art asset (Discord Developer Portal → Rich Presence → Art
+    // Assets) — shows as a question mark in Discord until an asset with this exact key exists there; this
+    // app can't upload it itself, that's a manual step tied to the portal login, not something IPC can do.
+    private const string LargeImageKey = "logo";
+
     public Task SetActivityAsync(string gameTitle, DateTimeOffset startedAt) => SendActivityAsync(gameTitle, new
     {
         details = gameTitle,
         state = "Playing",
         timestamps = new { start = startedAt.ToUnixTimeSeconds() },
+        assets = new { large_image = LargeImageKey, large_text = "Cartridge OS" },
     });
 
-    public Task ClearActivityAsync() => SendActivityAsync(null, null);
+    /// <summary>Shown whenever no game is running — on connect, and again once a game exits — so Discord
+    /// always shows *something* for as long as Cartridge OS is open, not just mid-session. Timestamp is the
+    /// app's own launch time, not the current moment, so the "elapsed" counter reflects how long the user's
+    /// actually been in Cartridge OS rather than resetting to 0:00 every time a game closes.</summary>
+    public Task SetIdleActivityAsync() => SendActivityAsync("(idle)", new
+    {
+        details = "Browsing the library",
+        state = "In Cartridge OS",
+        timestamps = new { start = _appStartedAtUtc.ToUnixTimeSeconds() },
+        assets = new { large_image = LargeImageKey, large_text = "Cartridge OS" },
+    });
 
     private async Task SendActivityAsync(string? gameTitle, object? activity)
     {

@@ -266,5 +266,23 @@
 
         <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
         <views:SettingsPanel Grid.Column="1" />
+
+        <!-- Error toast — top-center, above everything else (last in z-order). The fullscreen kiosk shell
+             has no title bar/status bar for a background failure (a scanner throwing, a DB write failing)
+             to show up in otherwise; see MainViewModel.ShowError for what populates this. -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,20,0,0" Padding="16,10" MaxWidth="640"
+                CornerRadius="10" Background="{StaticResource ErrorBrush}"
+                Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                           Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="White" FontSize="13"
+                           TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="520" />
+                <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" Command="{Binding DismissErrorCommand}"
+                        Style="{StaticResource WindowControlButtonBase}" Foreground="White"
+                        Width="24" Height="24" Margin="10,0,0,0" ToolTip="Dismiss" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

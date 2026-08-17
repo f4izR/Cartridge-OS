@@ -54,10 +54,10 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Margin="14" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
+                    <Border Grid.Row="0" Margin="0" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
                         <TextBlock Text="🎮" FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
                     </Border>
-                    <Border x:Name="ArtworkImage" Grid.Row="0" Margin="14" CornerRadius="9"
+                    <Border x:Name="ArtworkImage" Grid.Row="0" Margin="0" CornerRadius="9"
                             RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
                         <Border.RenderTransform>
                             <ScaleTransform ScaleX="1" ScaleY="1" />
@@ -68,7 +68,7 @@
                     </Border>
                     <TextBlock x:Name="TitleText" Grid.Row="1" Text="{Binding Game.Title}"
                                Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"
-                               Margin="14,0,14,14" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               Margin="6,6,6,12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                HorizontalAlignment="Center" TextAlignment="Center" />
 
                     <Border Grid.RowSpan="2" CornerRadius="12" Background="#B0000000"
@@ -159,14 +159,14 @@
              tile to its new Canvas position/size — no Selector/ScrollViewer centering to keep in sync,
              which is what kept breaking. Canvas (not a StackPanel) since tiles are absolutely positioned
              by offset-from-center, not left-to-right document flow — see HomeView.xaml.cs for the layout
-             math; 1750x360 = (2*HomeCarouselSideCount+1) slots * 250px pitch, tallest (center) tile height. -->
+             math; 1750x430 = (2*HomeCarouselSideCount+1) slots * 250px pitch, tallest (center) tile height. -->
         <ItemsControl Grid.Row="1"
                       ItemsSource="{Binding HomeCarouselSlots}"
                       ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
                       HorizontalAlignment="Center">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <Canvas Width="1750" Height="360" />
+                    <Canvas Width="1750" Height="430" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>

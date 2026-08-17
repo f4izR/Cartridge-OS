@@ -33,7 +33,7 @@ public partial class OverlayWindow : Window, IGamepadInputTarget
         switch (action)
         {
             case GamepadAction.Confirm: (Keyboard.FocusedElement as Button)?.Command?.Execute(null); break;
-            case GamepadAction.Back or GamepadAction.Menu: Close(); break; // Menu re-closes the overlay it just opened, same as the hotkey toggle
+            case GamepadAction.Back or GamepadAction.Power: Close(); break; // Power (Guide/Xbox/PS button) re-closes the overlay it just opened, same as the hotkey toggle
             case GamepadAction.NavigateUp: (Keyboard.FocusedElement as UIElement)?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Up)); break;
             case GamepadAction.NavigateDown: (Keyboard.FocusedElement as UIElement)?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Down)); break;
         }

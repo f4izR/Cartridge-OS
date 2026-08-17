@@ -12,8 +12,12 @@ public partial class HomeView : UserControl
 {
     // Tile sizes and horizontal spacing for the carousel — kept here rather than in the DataTemplate
     // since position and size are computed together (ApplyOffset) and driven by code, not XAML triggers.
-    private const double CenterWidth = 260, CenterHeight = 360;
-    private const double SideWidth = 190, SideHeight = 264;
+    // Heights sized so the image row (tile height minus the title row beneath it) lands close to a 2:3
+    // portrait box-art ratio at each tile's width — the old 360/264 heights made the image row noticeably
+    // wider than 2:3, so UniformToFill (see HomeView.xaml's ArtworkImage) had to crop a lot more off the
+    // top/bottom than real box art needs, cropping in on characters/logos. Widths unchanged.
+    private const double CenterWidth = 260, CenterHeight = 430;
+    private const double SideWidth = 190, SideHeight = 320;
     private const double SlotPitch = 250; // horizontal distance between adjacent offsets' centers
     private const double CanvasCenterX = (2 * MainViewModel.HomeCarouselSideCount + 1) * SlotPitch / 2; // matches the Canvas width in HomeView.xaml
     private static readonly TimeSpan SlideDuration = TimeSpan.FromMilliseconds(340);

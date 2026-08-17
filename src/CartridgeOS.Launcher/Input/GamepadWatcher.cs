@@ -30,8 +30,18 @@ public sealed class GamepadWatcher
         [GamepadButton.X] = GamepadAction.ToggleSearch,
         [GamepadButton.Y] = GamepadAction.Secondary,
         [GamepadButton.Back] = GamepadAction.ToggleSettings, // physical View/Share button
-        [GamepadButton.Guide] = GamepadAction.Menu, // Xbox guide button / PS button — overlay toggle
-        [GamepadButton.Start] = GamepadAction.Power, // previously unbound since the overlay toggle moved to Guide/PS
+        // Start = Xbox "Menu" button (hamburger) / PS "Options" button — real Xbox/PS5 dashboards use this
+        // slot for "options for whatever's selected" (Manage game / Uninstall on Xbox Home), so it opens the
+        // selected tile's context menu here too. Deliberately NOT the Guide button below (see its comment).
+        [GamepadButton.Start] = GamepadAction.Menu,
+        // Guide = the round Xbox/PS button — kept for its real-console role (system-level overlay: toggles
+        // the in-game overlay while a game is running, opens the Power menu otherwise) but never the *only*
+        // path to anything essential: Windows' own Xbox Game Bar grabs this exact button globally by default
+        // (Settings > Gaming > Xbox Game Bar > "Open Xbox Game Bar using this button on a controller"), which
+        // this app has no way to suppress — pressing Guide can pop Windows' own overlay on top instead of (or
+        // alongside) reaching this app, so item-context-menu access lives on Start above instead, and Power is
+        // also reachable via the header button/mouse.
+        [GamepadButton.Guide] = GamepadAction.Power,
         [GamepadButton.LeftShoulder] = GamepadAction.PreviousTab,
         [GamepadButton.RightShoulder] = GamepadAction.NextTab,
     };

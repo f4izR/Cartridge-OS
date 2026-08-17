@@ -184,10 +184,11 @@ public partial class App : Application
             // never also reach the launcher window underneath (double-handling a Confirm/Back press).
             if (_modalGamepadTarget is { } target) { target.HandleAction(action); return; }
 
-            // Menu means two different things depending on context: toggle the in-game overlay while a game is
-            // running (works with no launcher window open, unlike the old per-window binding), or — when nothing's
-            // running — open the selected tile's context menu (Change Wallpaper / Delete Game) in the launcher.
-            if (action == GamepadAction.Menu && _runningGameProcess is not null) ToggleOverlay();
+            // Power (the Guide/Xbox/PS button, see GamepadWatcher.ActionMap) means two things depending on
+            // context: toggle the in-game overlay while a game is running (works with no launcher window open,
+            // unlike the old per-window binding), or — when nothing's running — open the Power menu in the
+            // launcher (its normal binding, handled by MainWindow.HandleGamepadAction like any other action).
+            if (action == GamepadAction.Power && _runningGameProcess is not null) ToggleOverlay();
             else _launcherWindow?.HandleGamepadAction(action);
         });
     }
@@ -250,7 +251,7 @@ public partial class App : Application
         Dispatcher.BeginInvoke(() =>
         {
             _currentController = kind;
-            if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Generic, GamepadAction.Menu);
+            if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Generic, GamepadAction.Power);
         });
     }
 
@@ -471,7 +472,7 @@ public partial class App : Application
         _runningGameProcess = null;
         _runningGameTitle = null;
         CloseOverlay();
-        _ = _discord?.ClearActivityAsync();
+        _ = _discord?.SetIdleActivityAsync(); // back to "Browsing the library" rather than clearing to nothing
         ShowLauncher(); // Steam-like: bring the launcher back automatically once the game closes
     }
 

@@ -58,6 +58,26 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _hasRecentGames, value);
     }
 
+    // On-screen error toast — the fullscreen kiosk shell has no title bar/status bar for a background
+    // failure to show up in, so without this, things like a scanner throwing or a DB write failing were
+    // either fully silent or (worse) took the whole app down with nothing but a generic Windows crash
+    // dialog. See ShowError below for how this gets populated.
+    private string? _errorMessage;
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetProperty(ref _errorMessage, value);
+    }
+
+    private bool _hasErrorMessage;
+    public bool HasErrorMessage
+    {
+        get => _hasErrorMessage;
+        private set => SetProperty(ref _hasErrorMessage, value);
+    }
+
+    private int _errorToastToken; // bumped on every new ShowError so an older auto-dismiss can't clear a newer message
+
     private double _storageUsedPercent;
     /// <summary>Percent used on whichever drive SelectedStorageDrive points at (system drive by default).</summary>
     public double StorageUsedPercent
@@ -315,6 +335,10 @@ public sealed class MainViewModel : ViewModelBase
             // so it can't keep silently filtering Home's carousel / Recently Played's nav list (both walk
             // GamesView too) with no visible search box left to explain why.
             if (value != AppScreen.Library) IsSearchOpen = false;
+            // Set here rather than at each input site (gamepad LB/RB via CycleScreen, mouse click on the
+            // nav pill's RadioButtons) so both trigger it for free — SetProperty above already no-ops an
+            // unchanged value, so this never fires on construction's initial assignment.
+            SoundService.PlayTabSwitch();
         }
     }
 
@@ -484,6 +508,25 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ClearScreenSaverImagesCommand { get; }
     public ICommand BrowseScreenSaverMusicCommand { get; }
     public ICommand ClearScreenSaverMusicCommand { get; }
+    public ICommand DismissErrorCommand { get; }
+
+    /// <summary>Puts a message on the on-screen error toast, auto-dismissed after a few seconds (or
+    /// immediately via DismissErrorCommand). The only user-visible surface for a failure that isn't
+    /// already handled some other way (a MessageBox confirmation, a tray balloon) — see field comment
+    /// on ErrorMessage above for why this exists at all.</summary>
+    private void ShowError(string message)
+    {
+        ErrorMessage = message;
+        HasErrorMessage = true;
+        int token = ++_errorToastToken;
+        _ = DismissErrorAfterDelayAsync(token);
+    }
+
+    private async Task DismissErrorAfterDelayAsync(int token)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(6));
+        if (token == _errorToastToken) HasErrorMessage = false;
+    }
 
     public MainViewModel()
     {
@@ -501,6 +544,7 @@ public sealed class MainViewModel : ViewModelBase
         RemoveGameCommand = new RelayCommand(RemoveGame);
         ChangeArtworkCommand = new RelayCommand(ChangeArtwork);
         RevertArtworkCommand = new RelayCommand(RevertArtwork);
+        DismissErrorCommand = new RelayCommand(() => HasErrorMessage = false);
         ScanForGamesCommand = new RelayCommand(ScanForGames);
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
@@ -728,7 +772,16 @@ public sealed class MainViewModel : ViewModelBase
             ExecutablePath = exeDialog.FileName,
             ArtworkPath = artworkPath
         };
-        game.Id = _db.AddGame(game);
+
+        try
+        {
+            game.Id = _db.AddGame(game);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Couldn't add \"{game.Title}\" — {ex.Message}");
+            return;
+        }
 
         var tile = new GameTileViewModel(game);
         Games.Add(tile);
@@ -744,16 +797,31 @@ public sealed class MainViewModel : ViewModelBase
             "Remove Game", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirmed != MessageBoxResult.Yes) return;
 
-        _db.DeleteGame(game.Id);
+        try
+        {
+            _db.DeleteGame(game.Id);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Couldn't remove \"{game.Title}\" — {ex.Message}");
+            return;
+        }
+
         Games.Remove(game);
         SelectedGame = Games.FirstOrDefault();
         RebuildRecentGames();
 
         // Otherwise this game's cache entries (downloaded boxart/hero originals, decoded-size variants)
-        // just linger on disk forever with nothing left to ever reference or clean them up again.
-        ArtworkFetcher.PurgeCache(game.Title, game.Id);
-        ArtworkCache.PurgeCacheFor(game.ArtworkPath);
-        ArtworkCache.PurgeCacheFor(game.HeroImagePath);
+        // just linger on disk forever with nothing left to ever reference or clean them up again. Best-
+        // effort past this point — the game's already gone from the library either way, so a cache-purge
+        // failure (e.g. a file briefly locked) isn't worth surfacing as an error to the user.
+        try
+        {
+            ArtworkFetcher.PurgeCache(game.Title, game.Id);
+            ArtworkCache.PurgeCacheFor(game.ArtworkPath);
+            ArtworkCache.PurgeCacheFor(game.HeroImagePath);
+        }
+        catch (IOException) { }
     }
 
     // Tile artwork slot is ~2:3 portrait (matches ArtworkCropWindow's crop viewport, and the box-art
@@ -776,16 +844,23 @@ public sealed class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() != true) return;
 
-        string artworkPath = dialog.FileName;
-        if (!MatchesTileAspect(artworkPath))
+        try
         {
-            var cropWindow = new ArtworkCropWindow(artworkPath) { Owner = Application.Current.MainWindow };
-            if (cropWindow.ShowDialog() != true || cropWindow.ResultPath is null) return;
-            artworkPath = cropWindow.ResultPath;
-        }
+            string artworkPath = dialog.FileName;
+            if (!MatchesTileAspect(artworkPath))
+            {
+                var cropWindow = new ArtworkCropWindow(artworkPath) { Owner = Application.Current.MainWindow };
+                if (cropWindow.ShowDialog() != true || cropWindow.ResultPath is null) return;
+                artworkPath = cropWindow.ResultPath;
+            }
 
-        _db.UpdateArtworkPath(game.Id, artworkPath);
-        game.SetArtworkPath(artworkPath);
+            _db.UpdateArtworkPath(game.Id, artworkPath);
+            game.SetArtworkPath(artworkPath);
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or System.Data.Common.DbException)
+        {
+            ShowError($"Couldn't set artwork for \"{game.Title}\" — {ex.Message}");
+        }
     }
 
     private static bool MatchesTileAspect(string imagePath)
@@ -801,7 +876,8 @@ public sealed class MainViewModel : ViewModelBase
         var game = SelectedGame;
         if (game is null || !game.TryRevertArtwork(out var restored)) return;
 
-        _db.UpdateArtworkPath(game.Id, restored);
+        try { _db.UpdateArtworkPath(game.Id, restored); }
+        catch (System.Data.Common.DbException ex) { ShowError($"Couldn't revert artwork for \"{game.Title}\" — {ex.Message}"); }
     }
 
     private async Task ChooseWallpaperAsync()
@@ -813,14 +889,21 @@ public sealed class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() != true) return;
 
-        _settings.CustomWallpaperPath = dialog.FileName;
-        _settings.WallpaperMode = WallpaperMode.CustomImage;
-        SettingsStore.Save(_settings);
-        OnPropertyChanged(nameof(WallpaperMode));
-        OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
-        OnPropertyChanged(nameof(CustomWallpaperPath));
+        try
+        {
+            _settings.CustomWallpaperPath = dialog.FileName;
+            _settings.WallpaperMode = WallpaperMode.CustomImage;
+            SettingsStore.Save(_settings);
+            OnPropertyChanged(nameof(WallpaperMode));
+            OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
+            OnPropertyChanged(nameof(CustomWallpaperPath));
 
-        await LoadCustomWallpaperAsync(dialog.FileName);
+            await LoadCustomWallpaperAsync(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            ShowError($"Couldn't set that wallpaper — {ex.Message}");
+        }
     }
 
     private async Task LoadCustomWallpaperAsync(string path) =>
@@ -898,25 +981,65 @@ public sealed class MainViewModel : ViewModelBase
         if (ReferenceEquals(SelectedGame, tile)) await RefreshHomeBackgroundAsync(); // swap the boxart-based backdrop for the real hero now that it's ready
     }
 
-    private void ScanForGames() => ImportScannedGames(ScanTrustedLauncherSources());
+    private void ScanForGames()
+    {
+        var (games, failed) = ScanTrustedLauncherSources();
+        ImportScannedGames(games);
+        // User-initiated (clicked "Scan for Games"), so a failure here should actually be visible —
+        // unlike RescanInBackgroundAsync below, which deliberately doesn't toast for the same failure.
+        if (failed.Count > 0) ShowError($"Couldn't scan {string.Join(", ", failed)} — see scan.log for details.");
+    }
 
     // Runs the same trusted-launcher scan the button does, but off the UI thread (registry/file
     // I/O shouldn't cause a periodic hitch) and never the heuristic standalone scanner — popping
-    // its confirmation dialog unprompted in the background would be bad UX.
+    // its confirmation dialog unprompted in the background would be bad UX. Failures are logged (see
+    // ScanTrustedLauncherSources) but deliberately not toasted here — a scanner that's reliably broken
+    // on this machine would otherwise pop an unprompted error every 15 minutes forever.
     private async Task RescanInBackgroundAsync()
     {
-        var scanned = await Task.Run(() => ScanTrustedLauncherSources().ToList());
-        ImportScannedGames(scanned);
+        var (games, _) = await Task.Run(ScanTrustedLauncherSources);
+        ImportScannedGames(games);
     }
 
-    private static IEnumerable<Game> ScanTrustedLauncherSources() =>
-        new SteamScanner().Scan()
-            .Concat(new EpicScanner().Scan())
-            .Concat(new RiotScanner().Scan())
-            .Concat(new PublisherGameScanner("GOG").Scan())
-            .Concat(new PublisherGameScanner("Ubisoft").Scan())
-            .Concat(new PublisherGameScanner("Electronic Arts").Scan())
-            .Concat(new PublisherGameScanner("Blizzard Entertainment").Scan());
+    // Each scanner runs in isolation — one throwing (bad registry data, a malformed manifest, a
+    // permissions error on some install folder) used to take the *entire* scan down with it, and
+    // since nothing caught that, it would propagate all the way to App's DispatcherUnhandledException
+    // and crash the whole fullscreen session over what should be a "the Ubisoft scan didn't work"
+    // situation. Returns what every other scanner still found, plus which ones failed.
+    private static (List<Game> Games, List<string> Failed) ScanTrustedLauncherSources()
+    {
+        var games = new List<Game>();
+        var failed = new List<string>();
+
+        void TryScan(string name, Func<List<Game>> scan)
+        {
+            try { games.AddRange(scan()); }
+            catch (Exception ex) { failed.Add(name); LogScanFailure(name, ex); }
+        }
+
+        TryScan("Steam", () => new SteamScanner().Scan());
+        TryScan("Epic", () => new EpicScanner().Scan());
+        TryScan("Riot", () => new RiotScanner().Scan());
+        TryScan("GOG", () => new PublisherGameScanner("GOG").Scan());
+        TryScan("Ubisoft", () => new PublisherGameScanner("Ubisoft").Scan());
+        TryScan("EA", () => new PublisherGameScanner("Electronic Arts").Scan());
+        TryScan("Battle.net", () => new PublisherGameScanner("Blizzard Entertainment").Scan());
+
+        return (games, failed);
+    }
+
+    // ponytail: plain append-to-file log, same pattern as DiscordRichPresence/ArtworkFetcher's own logs —
+    // this file stays tiny (scanners essentially never throw; this exists for the rare case one does).
+    private static void LogScanFailure(string scannerName, Exception ex)
+    {
+        try
+        {
+            string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CartridgeOS", "scan.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {scannerName} scanner failed: {ex}\n\n");
+        }
+        catch (IOException) { }
+    }
 
     // Async because XboxScanner shells out to PowerShell (can take a couple seconds) — running that
     // synchronously on the UI thread like the other heuristic scan used to would freeze the window.
@@ -945,20 +1068,37 @@ public sealed class MainViewModel : ViewModelBase
     /// installed packages, not filesystem paths, so no directory could ever scope it) only runs for the
     /// default (no-directory) scan — a picked directory means "show me what's in this folder," not "also
     /// show me every Xbox/Store app regardless of where I pointed this."
-    /// Shared by the initial "Find More Games" scan and the scan-results window's own re-scan-on-change.</summary>
+    /// Shared by the initial "Find More Games" scan and the scan-results window's own re-scan-on-change.
+    /// Both real sub-scanners run isolated (see ScanTrustedLauncherSources) and this is always
+    /// user-initiated, so a failure toasts rather than logging quietly.</summary>
     private async Task<List<Game>> ScanCandidatesAsync(string? directory, bool recursive)
     {
         var existingExePaths = new HashSet<string>(Games.Select(g => g.ExecutablePath), StringComparer.OrdinalIgnoreCase);
-        return await Task.Run(() =>
+        var failed = new List<string>();
+        var result = await Task.Run(() =>
         {
             var scanner = new StandaloneExecutableScanner();
-            var standalone = directory is null ? scanner.Scan()
-                : recursive ? scanner.ScanRecursive([directory])
-                : scanner.Scan([directory]);
-            return (directory is null ? standalone.Concat(new XboxScanner().Scan()) : standalone)
-                .Where(g => !existingExePaths.Contains(g.ExecutablePath))
-                .ToList();
+            List<Game> standalone;
+            try
+            {
+                standalone = directory is null ? scanner.Scan()
+                    : recursive ? scanner.ScanRecursive([directory])
+                    : scanner.Scan([directory]);
+            }
+            catch (Exception ex) { failed.Add("folder scan"); LogScanFailure("StandaloneExecutable", ex); standalone = []; }
+
+            IEnumerable<Game> combined = standalone;
+            if (directory is null)
+            {
+                try { combined = standalone.Concat(new XboxScanner().Scan()); }
+                catch (Exception ex) { failed.Add("Xbox/Store"); LogScanFailure("Xbox", ex); }
+            }
+
+            return combined.Where(g => !existingExePaths.Contains(g.ExecutablePath)).ToList();
         });
+
+        if (failed.Count > 0) ShowError($"Couldn't complete {string.Join(", ", failed)} — see scan.log for details.");
+        return result;
     }
 
     private void ImportScannedGames(IEnumerable<Game> scannedGames)
