@@ -25,14 +25,17 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <!-- Card min-height and the artwork square below (RecentArtworkSize) are the two knobs that
-                             control this row's overall size — bump RecentArtworkSize for bigger art, MinHeight to
-                             match (art + 2x Padding, so it isn't cropped/squeezed). -->
+                        <!-- Card min-height and the artwork box below are the two knobs that control this row's
+                             overall size — bump the artwork Width/Height for bigger art, MinHeight to match (art
+                             height + 2x Padding, so it isn't cropped/squeezed). Artwork is 100x150 (2:3, matching
+                             real portrait box-art proportions) rather than square — a square box forced
+                             UniformToFill to crop hard off the top/bottom of every piece of art (cutting into
+                             logos/character heads), the same issue Home's carousel tiles had before their fix. -->
                         <!-- Idle scale is 0.97, not 1 — selection animates UP to exactly 1 (native size)
                              rather than past it, so the selected card never grows beyond its own layout
                              cell. Scaling past 1 got clipped by the ListBox's viewport (a straight cut on
                              whichever edge had no spare margin to grow into). -->
-                        <Border x:Name="Card" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="10" Padding="16" MinHeight="132"
+                        <Border x:Name="Card" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="10" Padding="16" MinHeight="182"
                                 BorderThickness="3" RenderTransformOrigin="0.5,0.5">
                             <Border.BorderBrush>
                                 <SolidColorBrush Color="Transparent" />
@@ -46,11 +49,11 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Width="100" Height="100" CornerRadius="10"
+                                <Border Grid.Column="0" Width="100" Height="150" CornerRadius="10"
                                         Background="{StaticResource SurfaceHoverBrush}">
                                     <TextBlock Text="🎮" FontSize="34" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
                                 </Border>
-                                <Border x:Name="ArtworkImage" Grid.Column="0" Width="100" Height="100" CornerRadius="10"
+                                <Border x:Name="ArtworkImage" Grid.Column="0" Width="100" Height="150" CornerRadius="10"
                                         RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
                                     <Border.RenderTransform>
                                         <ScaleTransform ScaleX="1" ScaleY="1" />
@@ -210,7 +213,7 @@
                  highlighted gradient only shows while this is the actually-selected tile (click it,
                  or land here via keyboard/gamepad nav once that's wired up); selecting a different
                  game elsewhere drops it back to the same plain card look every other tile has. -->
-            <Border x:Name="ContinuePlayingCard" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="220" Margin="0,0,0,20"
+            <Border x:Name="ContinuePlayingCard" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" CornerRadius="16" MinHeight="311" Margin="0,0,0,20"
                     BorderThickness="3" RenderTransformOrigin="0.5,0.5"
                     Visibility="{Binding HasContinuePlayingGame, Converter={StaticResource BoolToVisibility}}"
                     Cursor="Hand" MouseLeftButtonUp="ContinuePlayingCard_Click">
@@ -276,12 +279,15 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <!-- HeroArtworkSize knob: 170 here (both Width and Height) controls the hero image size;
-                         the hero card's own MinHeight above should grow to match if you size this up a lot. -->
-                    <Border Grid.Column="0" Width="170" Height="170" CornerRadius="12" Background="#22000000">
+                    <!-- HeroArtworkSize knob: 170x255 (2:3, matching real portrait box-art proportions rather
+                         than a square — see RecentRowStyle's comment above for why: a square box made
+                         UniformToFill crop hard off the top/bottom of every piece of art) controls the hero
+                         image size; the hero card's own MinHeight above auto-grows to fit (Grid has no
+                         RowDefinitions, so it sizes to its tallest child regardless of MinHeight's floor). -->
+                    <Border Grid.Column="0" Width="170" Height="255" CornerRadius="12" Background="#22000000">
                         <TextBlock Text="🎮" FontSize="50" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
                     </Border>
-                    <Border x:Name="HeroArtworkImage" Grid.Column="0" Width="170" Height="170" CornerRadius="12"
+                    <Border x:Name="HeroArtworkImage" Grid.Column="0" Width="170" Height="255" CornerRadius="12"
                             RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
                         <Border.RenderTransform>
                             <ScaleTransform ScaleX="1" ScaleY="1" />
