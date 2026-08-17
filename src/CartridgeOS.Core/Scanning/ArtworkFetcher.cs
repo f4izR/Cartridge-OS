@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using CartridgeOS.Core.Data;
 using CartridgeOS.Core.Models;
 
 namespace CartridgeOS.Core.Scanning;
@@ -14,13 +15,22 @@ namespace CartridgeOS.Core.Scanning;
 /// </summary>
 public static class ArtworkFetcher
 {
-    // Both API keys, not secrets in any way that matters here: this is a closed-source desktop app,
-    // so the key ships inside every install's compiled DLL regardless of whether it's a literal here
+    // Bundled fallback keys, not secrets in any way that matters here: this is a closed-source desktop
+    // app, so a key ships inside every install's compiled DLL regardless of whether it's a literal here
     // or read from an env var — an env var buys no real protection, it just adds a manual setup step
     // that breaks artwork for every new install until someone remembers to configure it. Same call as
-    // the Discord Client ID in DiscordRichPresence.cs.
+    // the Discord Client ID in DiscordRichPresence.cs. What an env var *doesn't* solve — the bundled key
+    // being shared by every install, so one leak/abuse report affects everyone and can only be rotated
+    // by shipping a new build — is what AppSettings.SteamGridDbApiKeyOverride/TheGamesDbApiKeyOverride
+    // are for: a user worried about that can drop in their own free key via Settings instead.
     private const string SteamGridDbApiKey = "c9fa5c51eeb057878f6ac31eb2cf80ad";
     private const string TheGamesDbApiKey = "f75af6a40def2957555e427d83ecde8d2c43afd53d94bbe02edf34b7dca7b6c3";
+
+    private static string EffectiveSteamGridDbApiKey(AppSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.SteamGridDbApiKeyOverride) ? SteamGridDbApiKey : settings.SteamGridDbApiKeyOverride;
+
+    private static string EffectiveTheGamesDbApiKey(AppSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.TheGamesDbApiKeyOverride) ? TheGamesDbApiKey : settings.TheGamesDbApiKeyOverride;
 
     private const string SteamGridDbSource = "SteamGridDB";
     private const string TheGamesDbSource = "TheGamesDB";
@@ -44,9 +54,17 @@ public static class ArtworkFetcher
             return cachePath;
         }
 
-        string? sourceUrl = TryGetSteamAppId(game.ExecutablePath, out string appId)
-            ? $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg"
-            : await FindSteamGridDbUrlAsync(game.Title) ?? await FindTheGamesDbUrlAsync(game.Title);
+        string? sourceUrl;
+        if (TryGetSteamAppId(game.ExecutablePath, out string appId))
+        {
+            sourceUrl = $"https://cdn.akamai.steamstatic.com/steam/apps/{appId}/library_600x900.jpg";
+        }
+        else
+        {
+            var settings = SettingsStore.Load();
+            sourceUrl = await FindSteamGridDbUrlAsync(game.Title, EffectiveSteamGridDbApiKey(settings))
+                ?? await FindTheGamesDbUrlAsync(game.Title, EffectiveTheGamesDbApiKey(settings));
+        }
 
         if (sourceUrl is null)
         {
@@ -91,6 +109,7 @@ public static class ArtworkFetcher
             return null;
         }
 
+        string sgdbKey = EffectiveSteamGridDbApiKey(SettingsStore.Load());
         string? url;
         try
         {
@@ -98,12 +117,12 @@ public static class ArtworkFetcher
             // entirely and is more reliable than it for anything with an ambiguous or common title.
             if (TryGetSteamAppId(game.ExecutablePath, out string appId))
             {
-                url = await FetchSteamGridDbHeroUrlAsync($"steam/{appId}", game.Title);
+                url = await FetchSteamGridDbHeroUrlAsync($"steam/{appId}", game.Title, sgdbKey);
             }
             else
             {
-                int? gameId = await FindSteamGridDbGameIdAsync(game.Title);
-                url = gameId is null ? null : await FetchSteamGridDbHeroUrlAsync($"game/{gameId}", game.Title);
+                int? gameId = await FindSteamGridDbGameIdAsync(game.Title, sgdbKey);
+                url = gameId is null ? null : await FetchSteamGridDbHeroUrlAsync($"game/{gameId}", game.Title, sgdbKey);
             }
         }
         catch (HttpRequestException ex)
@@ -130,11 +149,11 @@ public static class ArtworkFetcher
         }
     }
 
-    private static async Task<string?> FetchSteamGridDbHeroUrlAsync(string platformPath, string title)
+    private static async Task<string?> FetchSteamGridDbHeroUrlAsync(string platformPath, string title, string apiKey)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
             $"https://www.steamgriddb.com/api/v2/heroes/{platformPath}?dimensions=1920x620,3840x1240");
-        request.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
+        request.Headers.Authorization = new("Bearer", apiKey);
         using var response = await Http.SendAsync(request);
         if (HandleTooManyRequests(response, SteamGridDbSource, title)) return null;
         if (!response.IsSuccessStatusCode)
@@ -187,7 +206,7 @@ public static class ArtworkFetcher
         return true;
     }
 
-    private static async Task<string?> FindSteamGridDbUrlAsync(string title)
+    private static async Task<string?> FindSteamGridDbUrlAsync(string title, string apiKey)
     {
         if (!RateLimiter.IsAvailable(SteamGridDbSource))
         {
@@ -197,12 +216,12 @@ public static class ArtworkFetcher
 
         try
         {
-            int? gameId = await FindSteamGridDbGameIdAsync(title);
+            int? gameId = await FindSteamGridDbGameIdAsync(title, apiKey);
             if (gameId is null) return null;
 
             using var gridsRequest = new HttpRequestMessage(HttpMethod.Get,
                 $"https://www.steamgriddb.com/api/v2/grids/game/{gameId}?dimensions=600x900");
-            gridsRequest.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
+            gridsRequest.Headers.Authorization = new("Bearer", apiKey);
             using var gridsResponse = await Http.SendAsync(gridsRequest);
             if (HandleTooManyRequests(gridsResponse, SteamGridDbSource, title)) return null;
             if (!gridsResponse.IsSuccessStatusCode)
@@ -224,11 +243,11 @@ public static class ArtworkFetcher
 
     /// <summary>Shared by the grids (boxart) and heroes (Home banner) lookups — SteamGridDB's fuzzy title
     /// search to resolve its own internal game id. Callers must check RateLimiter.IsAvailable first.</summary>
-    private static async Task<int?> FindSteamGridDbGameIdAsync(string title)
+    private static async Task<int?> FindSteamGridDbGameIdAsync(string title, string apiKey)
     {
         using var searchRequest = new HttpRequestMessage(HttpMethod.Get,
             $"https://www.steamgriddb.com/api/v2/search/autocomplete/{Uri.EscapeDataString(title)}");
-        searchRequest.Headers.Authorization = new("Bearer", SteamGridDbApiKey);
+        searchRequest.Headers.Authorization = new("Bearer", apiKey);
         using var searchResponse = await Http.SendAsync(searchRequest);
         if (HandleTooManyRequests(searchResponse, SteamGridDbSource, title)) return null;
         if (!searchResponse.IsSuccessStatusCode)
@@ -242,7 +261,7 @@ public static class ArtworkFetcher
         return gameId;
     }
 
-    private static async Task<string?> FindTheGamesDbUrlAsync(string title)
+    private static async Task<string?> FindTheGamesDbUrlAsync(string title, string apiKey)
     {
         if (!RateLimiter.IsAvailable(TheGamesDbSource))
         {
@@ -252,7 +271,7 @@ public static class ArtworkFetcher
 
         try
         {
-            string searchUrl = $"https://api.thegamesdb.net/v1/Games/ByGameName?apikey={TheGamesDbApiKey}&name={Uri.EscapeDataString(title)}";
+            string searchUrl = $"https://api.thegamesdb.net/v1/Games/ByGameName?apikey={apiKey}&name={Uri.EscapeDataString(title)}";
             using var searchResponse = await Http.GetAsync(searchUrl);
             if (HandleTooManyRequests(searchResponse, TheGamesDbSource, title)) return null;
             if (!searchResponse.IsSuccessStatusCode)
@@ -268,7 +287,7 @@ public static class ArtworkFetcher
                 return null;
             }
 
-            string imagesUrl = $"https://api.thegamesdb.net/v1/Games/Images?apikey={TheGamesDbApiKey}&games_id={gameId}&filter[type]=boxart";
+            string imagesUrl = $"https://api.thegamesdb.net/v1/Games/Images?apikey={apiKey}&games_id={gameId}&filter[type]=boxart";
             using var imagesResponse = await Http.GetAsync(imagesUrl);
             if (HandleTooManyRequests(imagesResponse, TheGamesDbSource, title)) return null;
             if (!imagesResponse.IsSuccessStatusCode)

@@ -91,6 +91,26 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
+
+        <Style x:Key="SettingsTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <Style TargetType="Hyperlink">
+            <Setter Property="Foreground" Value="{StaticResource BrandCyanBrush}" />
+            <Setter Property="TextDecorations" Value="Underline" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource BrandCyanHoverBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
@@ -162,6 +182,27 @@
                         <ComboBox ItemsSource="{Binding StorageDrives}"
                                   SelectedItem="{Binding SelectedStorageDrive}"
                                   IsEditable="False" HorizontalAlignment="Left" MinWidth="160" />
+
+                        <TextBlock Text="Artwork Sources" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,20,0,10" />
+
+                        <!-- Box art is fetched using a bundled API key shared by every install. Leaving these
+                             blank uses that bundled key — filling one in switches this install to your own,
+                             e.g. if the shared one ever gets rate-limited. Both providers give free keys. -->
+                        <TextBlock Text="SteamGridDB API Key" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}">
+                            <Run Text="Optional — leave blank to use the built-in key. Get your own free key at" />
+                            <Hyperlink NavigateUri="https://www.steamgriddb.com/profile/preferences/api" RequestNavigate="Hyperlink_RequestNavigate">steamgriddb.com/profile/preferences/api</Hyperlink><Run Text="." />
+                        </TextBlock>
+                        <TextBox Text="{Binding SteamGridDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource SettingsTextBoxStyle}" Margin="0,0,0,16" />
+
+                        <TextBlock Text="TheGamesDB API Key" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}">
+                            <Run Text="Optional — leave blank to use the built-in key. Get your own free key at" />
+                            <Hyperlink NavigateUri="https://forums.thegamesdb.net" RequestNavigate="Hyperlink_RequestNavigate">forums.thegamesdb.net</Hyperlink><Run Text="." />
+                        </TextBlock>
+                        <TextBox Text="{Binding TheGamesDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource SettingsTextBoxStyle}" />
                     </StackPanel>
                 </TabItem>
                 <TabItem Header="Wallpaper" Style="{StaticResource SettingsTabItemStyle}">

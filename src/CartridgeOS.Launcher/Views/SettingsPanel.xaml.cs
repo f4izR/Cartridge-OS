@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
+using System.Windows.Navigation;
 
 namespace CartridgeOS.Launcher.Views;
 
@@ -13,6 +15,15 @@ public partial class SettingsPanel : UserControl
 
     private void PreviewScreenSaver_Click(object sender, RoutedEventArgs e) =>
         ((App)Application.Current).ShowScreenSaverNow();
+
+    /// <summary>Shared by every in-app Hyperlink (currently the two artwork-provider signup links) — WPF
+    /// Hyperlinks don't open anything themselves, they just raise this. UseShellExecute is required for
+    /// a URI ProcessStartInfo target since .NET Core dropped the old implicit shell-execute default.</summary>
+    private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
+    }
 
     /// <summary>Fades the tab content in on every category switch. Filtered to the TabControl itself
     /// (not code-behind-level EventTrigger, see SettingsTabControlStyle's comment) — Selector.SelectionChanged

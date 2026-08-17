@@ -31,4 +31,10 @@ public sealed class AppSettings
     /// than merging with it (simpler mental model: empty = defaults, set = only these).</summary>
     public string? ScreenSaverImagesFolder { get; set; }
     public string? ScreenSaverMusicFolder { get; set; }
+
+    /// <summary>Optional user-supplied API keys for artwork lookup (SteamGridDB/TheGamesDB, both offer
+    /// free self-serve keys) — null/empty means "use the bundled key". Lets a user who's worried about
+    /// the shared bundled key being rate-limited/abused switch to their own, see ArtworkFetcher.</summary>
+    public string? SteamGridDbApiKeyOverride { get; set; }
+    public string? TheGamesDbApiKeyOverride { get; set; }
 }

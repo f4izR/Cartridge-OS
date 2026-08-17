@@ -198,6 +198,32 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Empty/null means "use the bundled key" — see ArtworkFetcher.EffectiveSteamGridDbApiKey.</summary>
+    public string? SteamGridDbApiKeyOverride
+    {
+        get => _settings.SteamGridDbApiKeyOverride;
+        set
+        {
+            if (_settings.SteamGridDbApiKeyOverride == value) return;
+            _settings.SteamGridDbApiKeyOverride = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    /// <summary>Empty/null means "use the bundled key" — see ArtworkFetcher.EffectiveTheGamesDbApiKey.</summary>
+    public string? TheGamesDbApiKeyOverride
+    {
+        get => _settings.TheGamesDbApiKeyOverride;
+        set
+        {
+            if (_settings.TheGamesDbApiKeyOverride == value) return;
+            _settings.TheGamesDbApiKeyOverride = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
     private string _sessionUptimeLabel = "";
     public string SessionUptimeLabel
     {
