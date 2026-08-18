@@ -618,8 +618,6 @@ public sealed class MainViewModel : ViewModelBase
         string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)!;
         SelectedStorageDrive = _settings.StorageDriveLetter is { } saved && StorageDrives.Contains(saved) ? saved : systemDrive;
 
-        SeedIfEmpty(_db); // ponytail: placeholder titles (some with fake play history) until the game scanner (V2) exists, delete this once real games populate the db
-
         foreach (var game in _db.GetAllGames())
         {
             var tile = new GameTileViewModel(game);
@@ -631,6 +629,12 @@ public sealed class MainViewModel : ViewModelBase
 
         SelectedGame = Games.FirstOrDefault();
         RebuildRecentGames();
+
+        // First launch ever (empty library, nothing added/scanned yet) — auto-run the same silent,
+        // trusted-sources-only scan the periodic background rescan uses, so a fresh install isn't just
+        // an empty screen until the user finds and clicks "Scan for Games" themselves. Never touches the
+        // heuristic "Everything Else" scanner (that one needs user confirmation before adding anything).
+        if (Games.Count == 0) _ = RunFirstLaunchScanAsync();
 
         _rescanTimer = new DispatcherTimer { Interval = RescanInterval };
         _rescanTimer.Tick += async (_, _) => { await RescanInBackgroundAsync(); RefreshStorageStats(); };
@@ -1036,6 +1040,17 @@ public sealed class MainViewModel : ViewModelBase
         ImportScannedGames(games);
     }
 
+    /// <summary>Same silent scan as RescanInBackgroundAsync, but also picks a SelectedGame and populates
+    /// Recently Played once it lands — the periodic 15-minute rescan doesn't bother with either (nothing's
+    /// visibly "empty" at that point), but on a genuine first launch, Home/Recently Played would otherwise
+    /// stay blank until the next periodic tick even after the scan already found real games.</summary>
+    private async Task RunFirstLaunchScanAsync()
+    {
+        await RescanInBackgroundAsync();
+        SelectedGame ??= Games.FirstOrDefault();
+        RebuildRecentGames();
+    }
+
     // Each scanner runs in isolation — one throwing (bad registry data, a malformed manifest, a
     // permissions error on some install folder) used to take the *entire* scan down with it, and
     // since nothing caught that, it would propagate all the way to App's DispatcherUnhandledException
@@ -1164,17 +1179,5 @@ public sealed class MainViewModel : ViewModelBase
         tile.SetArtworkPath(artworkPath);
     }
 
-    private static void SeedIfEmpty(GameDatabase db)
-    {
-        if (db.GetAllGames().Count > 0) return;
-
-        string[] titles = ["Half-Life 2", "Portal 2", "Hades", "Celeste", "Elden Ring", "Stardew Valley", "Hollow Knight", "Doom Eternal"];
-        for (int i = 0; i < titles.Length; i++)
-        {
-            var game = new Game { Title = titles[i], ExecutablePath = string.Empty };
-            if (i < 3) game.LastPlayedUtc = DateTime.UtcNow.AddHours(-i); // fake recent-play history for the first few, to demo the recent row
-            db.AddGame(game);
-        }
-    }
 
 }
