@@ -39,7 +39,7 @@ What Cartridge OS actually does today, as a clean snapshot rather than a changel
 - Controller-first: every screen, Settings, and Library search are all reachable without touching a mouse — B/Circle backs out of whatever's open (Settings, then Search), the View/Share button opens Settings directly, X/Square opens search.
 - Per-brand on-screen button glyphs (Xbox vs. PlayStation labels) where used, e.g. the overlay's toggle hint.
 - Full keyboard equivalents for every gamepad action — the app is fully usable with no controller attached.
-- Right-stick-as-mouse emulation (moves the real system cursor, right trigger clicks) — primary monitor only.
+- Right-stick-as-mouse emulation (moves the real system cursor, right trigger clicks) — works across every monitor.
 - Controller hot-plug/reconnect handling, held-direction repeat, analog deadzones.
 - Controller (or, if none reports one, this machine's own) battery percentage shown in the header.
 - Modal dialogs (e.g. the artwork crop screen) can take exclusive gamepad input while open, so background nav can't fire underneath them.

@@ -1,0 +1,14 @@
+<Window x:Class="CartridgeOS.Launcher.ScreenSaverBlankWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cartridge OS"
+        WindowStyle="None"
+        WindowState="Normal"
+        WindowStartupLocation="Manual"
+        Left="0" Top="0" Width="800" Height="600"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Cursor="None"
+        Background="Black">
+</Window>

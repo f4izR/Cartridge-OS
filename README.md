@@ -101,7 +101,6 @@ Click or right-click it:
 
 - The overlay won't render on top of true DirectX exclusive-fullscreen games (bypasses the desktop compositor entirely) — windowed/borderless games are fine.
 - The scanners for GOG, Ubisoft Connect, EA App, Battle.net, and Xbox/Store are best-effort (no documented format to read, unlike Steam/Epic/Riot) — if one misses a game, use **+ Add Game**.
-- Right-stick mouse emulation is currently limited to your primary monitor.
 - Sound effects are placeholder tones, not final sound design.
 
 See `production-readiness.md` for the full list of what's left before this is a finished product.

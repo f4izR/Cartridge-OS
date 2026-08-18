@@ -6,17 +6,16 @@ namespace CartridgeOS.Launcher.Input;
 /// Moves the real system cursor from right-stick input and clicks via the right trigger,
 /// so the app is fully drivable without a physical mouse.
 /// </summary>
-/// <remarks>
-/// ponytail: primary monitor only, no multi-monitor virtual-desktop clamping — add if that's a real complaint.
-/// </remarks>
 public sealed class MouseEmulator
 {
     private const double MaxPixelsPerTick = 18; // tuned for the ~30Hz poll rate in GamepadWatcher
 
     private const uint MouseEventFLeftDown = 0x0002;
     private const uint MouseEventFLeftUp = 0x0004;
-    private const int SmCxScreen = 0;
-    private const int SmCyScreen = 1;
+    private const int SmXVirtualScreen = 76;
+    private const int SmYVirtualScreen = 77;
+    private const int SmCxVirtualScreen = 78;
+    private const int SmCyVirtualScreen = 79;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint { public int X; public int Y; }
@@ -32,9 +31,9 @@ public sealed class MouseEmulator
         if (stickX == 0f && stickY == 0f) return;
         if (!GetCursorPos(out var pos)) return;
 
-        var (width, height) = GetPrimaryScreenSize();
-        int newX = Math.Clamp(pos.X + (int)(stickX * MaxPixelsPerTick), 0, width - 1);
-        int newY = Math.Clamp(pos.Y - (int)(stickY * MaxPixelsPerTick), 0, height - 1);
+        var (left, top, width, height) = GetVirtualScreenBounds();
+        int newX = Math.Clamp(pos.X + (int)(stickX * MaxPixelsPerTick), left, left + width - 1);
+        int newY = Math.Clamp(pos.Y - (int)(stickY * MaxPixelsPerTick), top, top + height - 1);
 
         SetCursorPos(newX, newY);
     }
@@ -50,6 +49,8 @@ public sealed class MouseEmulator
 
     public static void SetCursorPosition(int x, int y) => SetCursorPos(x, y);
 
-    public static (int Width, int Height) GetPrimaryScreenSize() =>
-        (GetSystemMetrics(SmCxScreen), GetSystemMetrics(SmCyScreen));
+    /// <summary>The full multi-monitor desktop, not just the primary display — SM_XVIRTUALSCREEN/SM_YVIRTUALSCREEN
+    /// can be negative (a monitor positioned left of or above the primary one), so this is a rect, not just a size.</summary>
+    public static (int Left, int Top, int Width, int Height) GetVirtualScreenBounds() =>
+        (GetSystemMetrics(SmXVirtualScreen), GetSystemMetrics(SmYVirtualScreen), GetSystemMetrics(SmCxVirtualScreen), GetSystemMetrics(SmCyVirtualScreen));
 }

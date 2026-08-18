@@ -41,6 +41,11 @@ public partial class ScreenSaverWindow : Window, IGamepadInputTarget
     private bool _closing;
     private Point? _lastMousePosition;
 
+    /// <summary>Fired once, the instant any input dismisses this window — before its own fade-out finishes
+    /// closing it. Lets App close every monitor's blackout window together with this one, instead of only
+    /// this window reacting to the input that actually dismissed it.</summary>
+    public event Action? Dismissed;
+
     public ScreenSaverWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -197,10 +202,13 @@ public partial class ScreenSaverWindow : Window, IGamepadInputTarget
         if ((position - last).Length > 8) Dismiss();
     }
 
-    private void Dismiss()
+    /// <summary>internal, not private: App calls this when a blackout window on another monitor was the
+    /// one actually dismissed, so this window still gets its own fade-out instead of an abrupt cutoff.</summary>
+    internal void Dismiss()
     {
         if (_closing) return;
         _closing = true;
+        Dismissed?.Invoke();
 
         _slideTimer.Stop();
         _fadingIn = false;

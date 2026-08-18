@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,6 +9,8 @@ namespace CartridgeOS.Launcher;
 
 public partial class OverlayWindow : Window, IGamepadInputTarget
 {
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+
     public OverlayWindow(OverlayViewModel viewModel)
     {
         InitializeComponent();
@@ -15,9 +18,14 @@ public partial class OverlayWindow : Window, IGamepadInputTarget
 
         Loaded += (_, _) =>
         {
-            var workArea = SystemParameters.WorkArea;
-            Left = workArea.Right - Width - 24;
-            Top = workArea.Bottom - ActualHeight - 24;
+            // Was hardcoded to the primary monitor's work area (SystemParameters.WorkArea) — on a
+            // multi-monitor setup with the game running on a secondary display, the overlay popped up on
+            // the primary monitor instead, nowhere near what the user was actually looking at. The
+            // foreground window at the moment the overlay opens is the running game (that's how it got
+            // toggled), so target its monitor instead — physical-pixel SetWindowPos via MonitorHelper
+            // sidesteps needing that monitor's own DPI scale.
+            var monitor = MonitorHelper.GetMonitorBounds(GetForegroundWindow());
+            MonitorHelper.MoveToBottomRightOf(this, monitor, marginPx: 24);
 
             // Take over gamepad routing while the overlay is open (see App.SetModalGamepadTarget) —
             // otherwise only the hardcoded Menu-toggle reaches it and every other button (D-pad/Confirm)

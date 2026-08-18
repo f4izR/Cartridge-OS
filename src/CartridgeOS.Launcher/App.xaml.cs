@@ -65,7 +65,8 @@ public partial class App : Application
 
     private DispatcherTimer? _idleTimer;
     private DateTime _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo (IdleDetector) never sees gamepad input, so this is tracked separately
-    private ScreenSaverWindow? _screenSaverWindow;
+    private readonly List<ScreenSaverWindow> _screenSaverWindows = [];
+    private readonly List<ScreenSaverBlankWindow> _screenSaverBlankWindows = [];
 
     // No logging framework exists anywhere in this app — before this, an unhandled exception left zero
     // trail, just a generic Windows "stopped working" dialog. One append-only text file is enough to
@@ -219,7 +220,7 @@ public partial class App : Application
     {
         var settings = SettingsStore.Load();
         if (!settings.ScreenSaverEnabled) return;
-        if (_screenSaverWindow is not null) return;
+        if (_screenSaverWindows.Count > 0) return;
         if (_runningGameProcess is not null) return;
         if (_modalGamepadTarget is not null) return;
 
@@ -232,15 +233,43 @@ public partial class App : Application
     /// (testing should work even while the feature is turned off), but still won't interrupt a running game.</summary>
     public void ShowScreenSaverNow()
     {
-        if (_screenSaverWindow is not null || _runningGameProcess is not null) return;
+        if (_screenSaverWindows.Count > 0 || _runningGameProcess is not null) return;
         ShowScreenSaver(SettingsStore.Load());
     }
 
+    /// <summary>The slideshow/clock/music only ever plays on the primary monitor (unchanged Maximized
+    /// behavior) — a screen saver that only blanks the primary display and leaves every other monitor
+    /// fully visible/interactive defeats the point, but showing the full slideshow duplicated across every
+    /// monitor is more than asked for. Other monitors just go black (same as Windows' own lock screen).
+    /// Dismissing any one window (input, gamepad, or the primary's own audio fade-out finishing) closes
+    /// all of them together.</summary>
     private void ShowScreenSaver(AppSettings settings)
     {
-        _screenSaverWindow = new ScreenSaverWindow(settings);
-        _screenSaverWindow.Closed += (_, _) => _screenSaverWindow = null;
-        _screenSaverWindow.Show();
+        var primary = new ScreenSaverWindow(settings);
+        primary.Dismissed += CloseAllScreenSavers;
+        primary.Closed += (_, _) => _screenSaverWindows.Remove(primary);
+        primary.Show();
+        _screenSaverWindows.Add(primary);
+
+        var monitors = MonitorHelper.GetAllMonitorBounds();
+        var primaryBounds = MonitorHelper.GetMonitorBounds(new WindowInteropHelper(primary).EnsureHandle());
+        foreach (var monitor in monitors)
+        {
+            if (monitor.Left == primaryBounds.Left && monitor.Top == primaryBounds.Top) continue;
+
+            var blank = new ScreenSaverBlankWindow();
+            blank.Dismissed += CloseAllScreenSavers;
+            blank.Closed += (_, _) => _screenSaverBlankWindows.Remove(blank);
+            blank.Show();
+            MonitorHelper.CoverMonitor(blank, monitor);
+            _screenSaverBlankWindows.Add(blank);
+        }
+    }
+
+    private void CloseAllScreenSavers()
+    {
+        foreach (var window in _screenSaverWindows.ToArray()) window.Dismiss();
+        foreach (var window in _screenSaverBlankWindows.ToArray()) window.Close();
     }
 
     /// <summary>Keeps the overlay's on-screen button prompt matching whatever controller is actually plugged in.</summary>
@@ -482,7 +511,8 @@ public partial class App : Application
     {
         _singleInstancePipeCts?.Cancel();
         _idleTimer?.Stop();
-        _screenSaverWindow?.Close();
+        foreach (var window in _screenSaverWindows.ToArray()) window.Close();
+        foreach (var window in _screenSaverBlankWindows.ToArray()) window.Close();
         _gamepad?.Stop();
         _overlayHotkey?.Dispose();
         _discord?.Dispose();
