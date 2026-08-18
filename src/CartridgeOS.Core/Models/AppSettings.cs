@@ -24,7 +24,7 @@ public sealed class AppSettings
 
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverInactivityMinutes { get; set; } = 1;
-    public double ScreenSaverVolume { get; set; } = 0.5;
+    public double ScreenSaverVolume { get; set; } = 0.3;
 
     /// <summary>Folder overrides for the screen saver's slideshow/music — null means "use the bundled
     /// Assets/ScreenSaver/{Images,Sound} files". Setting one replaces the bundled set entirely rather
