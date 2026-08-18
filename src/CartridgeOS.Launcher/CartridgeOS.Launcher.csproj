@@ -36,6 +36,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Source of truth for UpdateChecker's version comparison and the installer's AppVersion
+         (installer/CartridgeOS.iss) — bump both together on release. -->
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
 </Project>

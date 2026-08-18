@@ -67,6 +67,7 @@ public partial class App : Application
     private DateTime _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo (IdleDetector) never sees gamepad input, so this is tracked separately
     private readonly List<ScreenSaverWindow> _screenSaverWindows = [];
     private readonly List<ScreenSaverBlankWindow> _screenSaverBlankWindows = [];
+    private UpdateChecker.UpdateInfo? _pendingUpdate;
 
     // No logging framework exists anywhere in this app — before this, an unhandled exception left zero
     // trail, just a generic Windows "stopped working" dialog. One append-only text file is enough to
@@ -153,6 +154,8 @@ public partial class App : Application
         _idleTimer.Tick += (_, _) => CheckIdle();
         _idleTimer.Start();
 
+        _ = CheckForUpdateAsync();
+
         ShowSplashThenLauncher();
     }
 
@@ -167,6 +170,18 @@ public partial class App : Application
             splash.Close();
         });
         splash.Show();
+    }
+
+    /// <summary>Fire-and-forget, once per app launch. Nudge-only (see UpdateChecker) — stores the result
+    /// so ShowLauncher can apply it whenever the launcher window actually exists, since this can resolve
+    /// before the splash screen finishes or while the window is closed (tray-only) later on.</summary>
+    private async Task CheckForUpdateAsync()
+    {
+        var update = await UpdateChecker.CheckAsync();
+        if (update is null) return;
+
+        _pendingUpdate = update;
+        _ = Dispatcher.BeginInvoke(() => _launcherWindow?.ShowUpdateAvailable(update.Version, update.ReleaseUrl));
     }
 
     private PipeResponse HandleSingleInstanceSignal(PipeRequest request)
@@ -299,6 +314,8 @@ public partial class App : Application
             _launcherWindow.UpdateControllerBattery(_gamepad?.ControllerBatteryPercent);
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
+
+            if (_pendingUpdate is { } update) _launcherWindow.ShowUpdateAvailable(update.Version, update.ReleaseUrl);
         }
 
         _launcherWindow.WindowState = WindowState.Maximized;

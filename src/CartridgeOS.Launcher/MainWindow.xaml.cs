@@ -264,6 +264,8 @@ public partial class MainWindow : Window
     /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>
     public void UpdateControllerBattery(int? percent) => ((MainViewModel)DataContext).ControllerBatteryPercent = percent;
 
+    public void ShowUpdateAvailable(string version, string releaseUrl) => ((MainViewModel)DataContext).ShowUpdateAvailable(version, releaseUrl);
+
     private PowerMenuWindow? _powerMenuWindow;
 
     private void Power_Click(object sender, RoutedEventArgs e) => OpenPowerMenu();

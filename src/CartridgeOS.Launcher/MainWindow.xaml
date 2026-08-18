@@ -284,5 +284,25 @@
                         Width="24" Height="24" Margin="10,0,0,0" ToolTip="Dismiss" />
             </StackPanel>
         </Border>
+
+        <!-- Update-available banner — bottom-center, so it never competes with the error toast's slot
+             above. Persistent (no auto-dismiss timer) until the user clicks it or dismisses it; see
+             MainViewModel.ShowUpdateAvailable/UpdateChecker for what populates this. -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,20" Padding="16,10" MaxWidth="640"
+                CornerRadius="10" Background="{StaticResource BrandCyanBrush}"
+                Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                           Foreground="Black" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding UpdateAvailableMessage}" Foreground="Black" FontSize="13"
+                           TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="420" />
+                <Button Content="Download" Command="{Binding OpenUpdateCommand}"
+                        Margin="14,0,0,0" Padding="10,4" />
+                <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" Command="{Binding DismissUpdateCommand}"
+                        Style="{StaticResource WindowControlButtonBase}" Foreground="Black"
+                        Width="24" Height="24" Margin="10,0,0,0" ToolTip="Dismiss" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

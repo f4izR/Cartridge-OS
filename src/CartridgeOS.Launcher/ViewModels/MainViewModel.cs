@@ -78,6 +78,24 @@ public sealed class MainViewModel : ViewModelBase
 
     private int _errorToastToken; // bumped on every new ShowError so an older auto-dismiss can't clear a newer message
 
+    // Update-available banner — separate from the error toast above (persistent until dismissed, not
+    // auto-timed, and shouldn't compete for the same on-screen slot). See App.OnStartup/UpdateChecker.
+    private string? _updateAvailableMessage;
+    public string? UpdateAvailableMessage
+    {
+        get => _updateAvailableMessage;
+        private set => SetProperty(ref _updateAvailableMessage, value);
+    }
+
+    private bool _hasUpdateAvailable;
+    public bool HasUpdateAvailable
+    {
+        get => _hasUpdateAvailable;
+        private set => SetProperty(ref _hasUpdateAvailable, value);
+    }
+
+    private string? _updateReleaseUrl;
+
     private double _storageUsedPercent;
     /// <summary>Percent used on whichever drive SelectedStorageDrive points at (system drive by default).</summary>
     public double StorageUsedPercent
@@ -509,6 +527,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand BrowseScreenSaverMusicCommand { get; }
     public ICommand ClearScreenSaverMusicCommand { get; }
     public ICommand DismissErrorCommand { get; }
+    public ICommand OpenUpdateCommand { get; }
+    public ICommand DismissUpdateCommand { get; }
 
     /// <summary>Puts a message on the on-screen error toast, auto-dismissed after a few seconds (or
     /// immediately via DismissErrorCommand). The only user-visible surface for a failure that isn't
@@ -528,6 +548,15 @@ public sealed class MainViewModel : ViewModelBase
         if (token == _errorToastToken) HasErrorMessage = false;
     }
 
+    /// <summary>Called once by App after UpdateChecker finds a newer release — nudge-only, no
+    /// silent download (see UpdateChecker's own doc comment for why).</summary>
+    public void ShowUpdateAvailable(string version, string releaseUrl)
+    {
+        UpdateAvailableMessage = $"Cartridge OS {version} is available.";
+        _updateReleaseUrl = releaseUrl;
+        HasUpdateAvailable = true;
+    }
+
     public MainViewModel()
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
@@ -545,6 +574,12 @@ public sealed class MainViewModel : ViewModelBase
         ChangeArtworkCommand = new RelayCommand(ChangeArtwork);
         RevertArtworkCommand = new RelayCommand(RevertArtwork);
         DismissErrorCommand = new RelayCommand(() => HasErrorMessage = false);
+        OpenUpdateCommand = new RelayCommand(() =>
+        {
+            if (_updateReleaseUrl is { } url) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            HasUpdateAvailable = false;
+        });
+        DismissUpdateCommand = new RelayCommand(() => HasUpdateAvailable = false);
         ScanForGamesCommand = new RelayCommand(ScanForGames);
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
