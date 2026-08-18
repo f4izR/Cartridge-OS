@@ -92,6 +92,13 @@ public partial class MainWindow : Window
         // handling, it only moved selection correctly for Up/Down, not Left/Right.
         PreviewKeyDown += (_, e) =>
         {
+            // Don't hijack keys a focused TextBox needs for normal editing (search box, Settings' API key
+            // fields) — this handler runs Preview/tunneling, so without this guard Left/Right/Enter/Escape
+            // never reach the TextBox at all (e.Handled = true below swallows them first), breaking cursor
+            // movement and Escape/Enter entirely for anyone typing. Confirmed live: typing "abcdef" then
+            // pressing Left three times then "XYZ" produced "abcdefXYZ" instead of "abcXYZdef".
+            if (Keyboard.FocusedElement is TextBox) return;
+
             GamepadAction? action = e.Key switch
             {
                 Key.Left => GamepadAction.NavigateLeft,

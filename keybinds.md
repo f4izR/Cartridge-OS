@@ -88,16 +88,19 @@ physical hardware (see `context.md`'s "no real UI automation here" limitation).
 | F4 | Power (opens/closes the power menu) |
 
 **Deliberately no keyboard shortcut for Toggle Search** — the search box is opened by clicking its
-icon (mouse) or the X/Square button (gamepad) only. A keyboard shortcut here would need to avoid
-every character a user might actually want to type while the search box has focus (arrow keys
-already have this exact problem — `PreviewKeyDown` is window-level and tunnels down to a focused
-`TextBox` before it can type into it — a pre-existing gap this session didn't introduce or fix),
-so letters/punctuation are off the table without a focus-aware guard that doesn't exist yet.
+icon (mouse) or the X/Square button (gamepad) only.
+
+**2026-08-18**: the focus-aware guard mentioned above now exists — `MainWindow`'s `PreviewKeyDown`
+skips entirely when `Keyboard.FocusedElement is TextBox`, so arrow keys/Enter/Escape reach a focused
+search box or Settings API-key field normally instead of being swallowed as nav actions first. Typing
+letters/punctuation while the search box has focus already worked (only the nav keys were the
+problem); this was found and fixed via a live keyboard-only test, not just code inspection.
 
 ## Log
 
 | Date | What changed |
 |---|---|
+| 2026-08-18 | Live keyboard-only test (no controller) found `MainWindow`'s window-level `PreviewKeyDown` was swallowing Left/Right/Up/Down/Enter/Escape before a focused `TextBox` (search box, Settings API-key fields) ever saw them, breaking cursor movement and Escape/Enter while typing. Fixed by skipping the handler when `Keyboard.FocusedElement is TextBox`. Also added a keyboard equivalent to `OverlayWindow` (previously mouse-only, the one modal dialog missing one). |
 | 2026-08-17 | Swapped what the Start (Menu/☰/Options) and Guide (round Xbox/PS) buttons do, after hands-on testing with a real Xbox controller found the mapping confusing — "which button opens a game's options," "the home button doesn't do what's expected." Root cause for the Guide-button confusion: Windows' own Xbox Game Bar grabs that exact physical button globally by default (Settings → Gaming → Xbox Game Bar), which this app can't override — pressing it could pop Windows' overlay instead of/on top of this app's. Fix: Start/Menu/Options now opens the selected tile's context menu (matches real Xbox Home/PS5 dashboard, where that button always means "options for what's selected" — previously this lived on Guide); Guide/PS keeps its "system-level button" role (overlay toggle in-game, Power menu otherwise) but is no longer the only path to anything essential, since it's the one button an OS-level hook can steal. `GamepadWatcher.ActionMap`, `App.OnGamepadAction`/`OnControllerChanged`, `OverlayWindow.HandleAction`, `OverlayViewModel`, `ControllerGlyphs` (Xbox: Menu→"Menu", Power→"Xbox"; PlayStation: Menu→"Options", Power→"PS") all updated to match. Builds clean, all 10 self-checks pass. **Still not re-verified hands-on after this specific change** — the original complaint was found via user testing, but this fix itself needs the same real-controller retest before calling it done. |
 | 2026-08-13 | Overlay (`OverlayWindow`) now registers as a modal gamepad target (D-Pad Up/Down + Confirm/Back), fixing the mouse-only gap. Title bar's bare minimize/close buttons replaced with a Power button opening a new controller-navigable power menu (`PowerMenuWindow`): Turn Off System / Restart System / Exit to Desktop / Shut Down Cartridge OS. Bound to the previously-unused Start button (`GamepadAction.Power`) and keyboard F4. Each menu option also has an Alt+letter access-key keyboard alternative (native WPF mnemonics, no extra code). |
 | 2026-08-12 | Overlay toggle moved from Start/Options to the Xbox Guide button / PS button (undocumented `XInputGetStateEx`, since the public XInput API masks the guide bit out) — see `context.md`. |

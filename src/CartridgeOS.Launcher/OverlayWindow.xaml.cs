@@ -26,6 +26,23 @@ public partial class OverlayWindow : Window, IGamepadInputTarget
             ReturnButton.Focus();
         };
         Closed += (_, _) => ((App)Application.Current).SetModalGamepadTarget(null);
+
+        // Keyboard equivalent, same convention as MainWindow/PowerMenuWindow's PreviewKeyDown — was
+        // missing here, leaving this the one modal dialog with no keyboard fallback (mouse-only).
+        PreviewKeyDown += (_, e) =>
+        {
+            GamepadAction? action = e.Key switch
+            {
+                Key.Up => GamepadAction.NavigateUp,
+                Key.Down => GamepadAction.NavigateDown,
+                Key.Enter or Key.Space => GamepadAction.Confirm,
+                Key.Escape => GamepadAction.Back,
+                _ => null,
+            };
+            if (!action.HasValue) return;
+            HandleAction(action.Value);
+            e.Handled = true;
+        };
     }
 
     public void HandleAction(GamepadAction action)
