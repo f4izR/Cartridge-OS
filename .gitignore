@@ -7,6 +7,10 @@
 bin/
 obj/
 
+# Installer build artifacts (regenerate via installer/publish.ps1 + ISCC installer/CartridgeOS.iss)
+installer/publish/
+installer/output/
+
 # Rider / VS Code
 .idea/
 .vscode/
