@@ -4,7 +4,7 @@
 ; start at user logon. Requires admin (Program Files + service install).
 
 #define MyAppName "Cartridge OS"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppExeName "CartridgeOS.Launcher.exe"
 #define MyServiceExeName "CartridgeOS.Service.exe"
 #define MyServiceName "CartridgeOS"
