@@ -114,10 +114,11 @@
     </UserControl.Resources>
 
     <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
-    <Border Width="460" Padding="24"
+    <Border x:Name="RootBorder" Width="460" Padding="24"
             Background="{StaticResource SurfaceRaisedBrush}"
             BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}"
-            Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
+            Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}"
+            IsVisibleChanged="RootBorder_IsVisibleChanged">
         <DockPanel>
             <TextBlock DockPanel.Dock="Top" Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
                        FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
@@ -259,7 +260,7 @@
 
                         <TextBlock Text="Volume" Style="{StaticResource SettingsActionLabelStyle}" />
                         <Slider Value="{Binding ScreenSaverVolume}" Minimum="0" Maximum="1" TickFrequency="0.1"
-                                IsSnapToTickEnabled="False" Width="200" HorizontalAlignment="Left" Margin="0,0,0,16" />
+                                IsSnapToTickEnabled="False" Width="200" HorizontalAlignment="Left" Margin="0,0,0,16" ValueChanged="Slider_ValueChanged" />
 
                         <TextBlock Text="Images" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
@@ -289,6 +290,51 @@
 
                         <Button Content="Preview Now" Click="PreviewScreenSaver_Click"
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </TabItem>
+                <!-- Static reference, not settings — matches keybinds.md (the source of truth this mirrors,
+                     kept in sync by hand since it's a small fixed list) but trimmed to what a player needs
+                     to know, not the "why it's mapped this way" reasoning that file carries for developers. -->
+                <TabItem Header="Controls" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Everywhere" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <TextBlock Text="D-Pad / Left Stick" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Move the selection" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="A / ✕" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Confirm — launch the selected game, or activate whatever's focused in a menu" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="B / ○" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Back — closes whatever's open on top (Settings, then Search)" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="Y / △" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Add Game (opens the file picker)" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="X / □" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Search — Library screen only" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="Menu (☰) / Options" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Opens the selected game's options (Change Wallpaper / Delete Game) — Library screen only" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="View / Share" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Opens/closes this Settings panel" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="LB / L1 and RB / R1" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Switch between Home, Recently Played, and Library" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="Guide / PS button" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Toggles the in-game overlay while a game is running, opens the Power menu otherwise" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="Right Stick / Right Trigger" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Moves the mouse cursor / clicks, for anything not reachable with the D-Pad" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,10" />
+
+                        <TextBlock Text="Left Trigger + Right Trigger (held together)" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Locks/unlocks the stick-driven cursor — handy if a worn stick drifts and drags the cursor around" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Testing the overlay" Style="{StaticResource SettingsSectionHeadingStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="The overlay only exists while a game launched from here is actually running — there's nothing to open from the launcher itself. Launch any game, then press Guide/PS (or Ctrl+Shift+O on keyboard) to bring it up over the game; press it again, or B/○, to close it." />
                     </StackPanel>
                 </TabItem>
             </TabControl>

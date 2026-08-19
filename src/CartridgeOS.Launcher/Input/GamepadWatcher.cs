@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace CartridgeOS.Launcher.Input;
 
 /// <summary>
@@ -10,7 +12,12 @@ public sealed class GamepadWatcher
     private static readonly TimeSpan InitialRepeatDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan RepeatInterval = TimeSpan.FromMilliseconds(130);
 
-    private const byte TriggerPressThreshold = 128; // half-pressed, out of 0-255
+    private const byte TriggerPressThreshold = 128; // half-pressed, out of 0-255 — used for the mouse-click threshold
+    // ponytail: lower than TriggerPressThreshold on purpose — squeezing both triggers to a full half-press
+    // *simultaneously* is harder than either alone (that's the whole point of using it as a deliberate combo,
+    // but it shouldn't require a precise two-finger effort every time), so the lock combo itself only needs a
+    // light touch on both.
+    private const byte ComboPressThreshold = 40;
 
     private static readonly GamepadButton[] DirectionButtons =
         [GamepadButton.DPadUp, GamepadButton.DPadDown, GamepadButton.DPadLeft, GamepadButton.DPadRight];
@@ -51,6 +58,9 @@ public sealed class GamepadWatcher
     private readonly Dictionary<GamepadButton, DateTime> _nextRepeatAt = new();
     private ushort _previousButtons;
     private bool _rightTriggerHeld;
+    private bool _suppressRightClick;
+    private bool _leftTriggerLogged;
+    private bool _rightTriggerLogged;
     private DateTime _nextBatteryCheckAt = DateTime.MinValue;
     private CancellationTokenSource? _cts;
 
@@ -110,6 +120,9 @@ public sealed class GamepadWatcher
                 _previousButtons = 0;
                 _nextRepeatAt.Clear();
                 if (_rightTriggerHeld) { _rightTriggerHeld = false; RightTriggerChanged?.Invoke(false); } // don't leave the mouse button stuck down on disconnect
+                _suppressRightClick = false;
+                _leftTriggerLogged = false;
+                _rightTriggerLogged = false;
             }
 
             try { await Task.Delay(PollInterval, token); } catch (TaskCanceledException) { }
@@ -148,6 +161,7 @@ public sealed class GamepadWatcher
 
             if (held && !wasHeld)
             {
+                Debug.WriteLine($"[Gamepad] {direction} pressed -> {ActionMap[direction]}");
                 ActionPressed?.Invoke(ActionMap[direction]);
                 _nextRepeatAt[direction] = now + InitialRepeatDelay;
             }
@@ -166,7 +180,7 @@ public sealed class GamepadWatcher
         {
             if (DirectionButtons.Contains(button)) continue; // handled above, with repeat
             bool pressed = ((GamepadButton)buttons & button) != 0 && ((GamepadButton)_previousButtons & button) == 0;
-            if (pressed) ActionPressed?.Invoke(action);
+            if (pressed) { Debug.WriteLine($"[Gamepad] {button} pressed -> {action}"); ActionPressed?.Invoke(action); }
         }
 
         _previousButtons = buttons;
@@ -175,11 +189,31 @@ public sealed class GamepadWatcher
         float rightY = ApplyDeadzone(gamepad.sThumbRY, XInput.RightThumbDeadzone);
         if (rightX != 0f || rightY != 0f) RightStickMoved?.Invoke(rightX, rightY);
 
-        bool triggerHeld = gamepad.bRightTrigger > TriggerPressThreshold;
-        if (triggerHeld != _rightTriggerHeld)
+        bool rightTriggerHeld = gamepad.bRightTrigger > TriggerPressThreshold; // click threshold — deliberately higher than the combo below
+        bool comboLeftHeld = gamepad.bLeftTrigger > ComboPressThreshold;
+        bool comboRightHeld = gamepad.bRightTrigger > ComboPressThreshold;
+        bool bothTriggersHeld = comboLeftHeld && comboRightHeld;
+
+        // Edge-triggered raw-value logging (not every poll — that'd flood the Output window at ~30Hz) so a
+        // controller whose triggers don't map where expected (bLeftTrigger/bRightTrigger stuck at 0, or a
+        // pad going through the RawGameController fallback with a wrong axis guess — see
+        // RawGameControllerSource's own comment) shows up here instead of the combo just silently never firing.
+        if (comboLeftHeld != _leftTriggerLogged) { Debug.WriteLine($"[Gamepad] LT raw={gamepad.bLeftTrigger} crossedComboThreshold={comboLeftHeld}"); _leftTriggerLogged = comboLeftHeld; }
+        if (comboRightHeld != _rightTriggerLogged) { Debug.WriteLine($"[Gamepad] RT raw={gamepad.bRightTrigger} crossedComboThreshold={comboRightHeld}"); _rightTriggerLogged = comboRightHeld; }
+
+        if (bothTriggersHeld && !_suppressRightClick)
         {
-            _rightTriggerHeld = triggerHeld;
-            RightTriggerChanged?.Invoke(triggerHeld);
+            _suppressRightClick = true; // both crossed together — treat as the cursor-lock combo, not a click
+            Debug.WriteLine($"[Gamepad] LT+RT combo fired ToggleCursorLock (LT={gamepad.bLeftTrigger}, RT={gamepad.bRightTrigger}, comboThreshold={ComboPressThreshold})");
+            ActionPressed?.Invoke(GamepadAction.ToggleCursorLock);
+        }
+        if (!comboLeftHeld && !comboRightHeld) _suppressRightClick = false; // combo done once both fully release
+
+        bool effectiveRightHeld = rightTriggerHeld && !_suppressRightClick;
+        if (effectiveRightHeld != _rightTriggerHeld)
+        {
+            _rightTriggerHeld = effectiveRightHeld;
+            RightTriggerChanged?.Invoke(effectiveRightHeld);
         }
     }
 

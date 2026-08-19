@@ -1,9 +1,13 @@
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Input;
+using System.Windows.Threading;
 using CartridgeOS.Launcher.Input;
 using CartridgeOS.Launcher.Services;
 using CartridgeOS.Launcher.ViewModels;
@@ -127,11 +131,74 @@ public partial class MainWindow : Window
         // Every action below acts directly on the ViewModel/background grid rather than going through
         // WPF focus, so without this guard a minimized window or an open Settings/Search panel didn't stop
         // Confirm/Menu/Power etc. from reaching straight through to whatever tile was still selected
-        // underneath (e.g. opening a tile's context menu while Settings covered the screen). Only the
-        // actions that can close those states stay live.
+        // underneath (e.g. opening a tile's context menu while Settings covered the screen).
         if (WindowState == WindowState.Minimized) return;
-        if ((vm.IsSettingsOpen || vm.IsSearchOpen) &&
-            action is not (GamepadAction.Back or GamepadAction.ToggleSettings or GamepadAction.ToggleSearch)) return;
+
+        if (_openGameContextMenu is { } contextMenu)
+        {
+            // Same MoveFocus routing as the Settings/Search block below — the context menu's own MenuItems
+            // handle Up/Down highlighting once one of them has focus (seeded in OpenGameContextMenu), this
+            // just needs to get out of the way of the Library-grid math further down while it's open.
+            Debug.WriteLine($"[MainWindow] ContextMenu guard: {action}, focused={Keyboard.FocusedElement}");
+            switch (action)
+            {
+                case GamepadAction.NavigateUp: MoveFocusFrom(FocusNavigationDirection.Up); break;
+                case GamepadAction.NavigateDown: MoveFocusFrom(FocusNavigationDirection.Down); break;
+                // These MenuItems wire up via Click="..." handlers in XAML, not Command — raising Click
+                // directly invokes them (and closes the menu, MenuItem's default Click behavior) without
+                // depending on synthetic keyboard state (see the Settings block's comment below for why
+                // that approach — tried first — didn't actually work).
+                case GamepadAction.Confirm when Keyboard.FocusedElement is MenuItem item: item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); break;
+                case GamepadAction.Back or GamepadAction.Menu: contextMenu.IsOpen = false; break;
+            }
+            return;
+        }
+
+        if (vm.IsSettingsOpen || vm.IsSearchOpen)
+        {
+            // Settings/Search cover the whole screen — route D-Pad/stick through normal WPF focus
+            // traversal instead of the Library-grid math below (same MoveFocus approach PowerMenuWindow
+            // uses for its own button list), since there was previously no fallback at all here and
+            // D-Pad nav was silently dead while either panel was open.
+            Debug.WriteLine($"[MainWindow] Settings/Search guard: {action}, focused={Keyboard.FocusedElement}, IsSettingsOpen={vm.IsSettingsOpen}");
+
+            // Belt-and-suspenders: if focus somehow isn't inside the Settings panel at all when a nav
+            // press arrives (e.g. it opened via mouse click on the gear icon, which never moves keyboard
+            // focus the way SettingsPanel's own IsVisibleChanged handler does), re-seed it before trying
+            // to move from it — otherwise MoveFocus below silently does nothing.
+            if (vm.IsSettingsOpen && action is GamepadAction.NavigateUp or GamepadAction.NavigateDown
+                or GamepadAction.NavigateLeft or GamepadAction.NavigateRight &&
+                (Keyboard.FocusedElement is not DependencyObject focused || !IsDescendantOf(SettingsHost, focused)))
+            {
+                Debug.WriteLine("[MainWindow] focus wasn't inside Settings — re-seeding via FocusFirst");
+                SettingsHost.FocusFirst();
+            }
+
+            // A synthetic KeyDown (tried first, see RaiseKeyOnFocused below — left in for other callers)
+            // doesn't work here: WPF's KeyEventArgs.KeyStates is derived from the REAL physical keyboard
+            // device, not from anything the KeyEventArgs constructor takes, so WPF's own directional-nav
+            // and control keyboard handling see a "key" that (as far as the real keyboard is concerned)
+            // isn't actually down and ignore it — confirmed by live testing, focus never moved. Calling
+            // each control's own API directly instead: reliable regardless of input-device state.
+            switch (action)
+            {
+                case GamepadAction.NavigateUp when Keyboard.FocusedElement is ComboBox combo: if (!AdjustComboBox(combo, -1)) MoveFocusFrom(FocusNavigationDirection.Up); break;
+                case GamepadAction.NavigateDown when Keyboard.FocusedElement is ComboBox combo: if (!AdjustComboBox(combo, +1)) MoveFocusFrom(FocusNavigationDirection.Down); break;
+                case GamepadAction.NavigateLeft when Keyboard.FocusedElement is Slider slider: if (!AdjustSlider(slider, -1)) MoveFocusFrom(FocusNavigationDirection.Left); break;
+                case GamepadAction.NavigateRight when Keyboard.FocusedElement is Slider slider: if (!AdjustSlider(slider, +1)) MoveFocusFrom(FocusNavigationDirection.Right); break;
+                case GamepadAction.NavigateUp: MoveFocusFrom(FocusNavigationDirection.Up); break;
+                case GamepadAction.NavigateDown: MoveFocusFrom(FocusNavigationDirection.Down); break;
+                case GamepadAction.NavigateLeft: MoveFocusFrom(FocusNavigationDirection.Left); break;
+                case GamepadAction.NavigateRight: MoveFocusFrom(FocusNavigationDirection.Right); break;
+                case GamepadAction.Confirm: ConfirmFocused(); break;
+                case GamepadAction.Back when vm.IsSettingsOpen: vm.IsSettingsOpen = false; break;
+                case GamepadAction.Back when vm.IsSearchOpen: vm.IsSearchOpen = false; break;
+                case GamepadAction.ToggleSettings: vm.ToggleSettingsCommand.Execute(null); break;
+                case GamepadAction.ToggleSearch when vm.SelectedScreen == AppScreen.Library: vm.ToggleSearchCommand.Execute(null); break;
+            }
+            Debug.WriteLine($"[MainWindow] after handling: focused={Keyboard.FocusedElement}");
+            return;
+        }
 
         var visibleGames = vm.GamesView.Cast<GameTileViewModel>().ToList(); // nav moves through whatever the search filter is currently showing, not the full library
         // This directional math (column count, ScrollIntoView) is specific to the Library grid — running it
@@ -182,7 +249,14 @@ public partial class MainWindow : Window
 
         if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);
         if (action == GamepadAction.Secondary && vm.AddGameCommand.CanExecute(null)) vm.AddGameCommand.Execute(null);
-        if (action == GamepadAction.Menu) OpenGameContextMenu(vm);
+        // Library-only: the tile's ContextMenu (Change Wallpaper / Delete Game) is only ever attached to
+        // Library's ListBoxItem style (LibraryView.xaml's GameTileStyle) — Home's carousel and Recently
+        // Played's tiles are a completely different visual tree with no context menu of their own. Without
+        // this guard, pressing Menu on Home/Recently Played still found *some* stale/off-screen Library
+        // ListBoxItem container (if one happened to be realized from an earlier visit) and anchored the
+        // menu to it — which looked like "opens anywhere on the screen" since that container had nothing
+        // to do with the tile actually on screen.
+        if (action == GamepadAction.Menu && vm.SelectedScreen == AppScreen.Library) OpenGameContextMenu(vm);
         if (action == GamepadAction.PreviousTab) CycleScreen(vm, -1);
         if (action == GamepadAction.NextTab) CycleScreen(vm, 1);
         // Back closes whatever's on top rather than navigating screens — same "back out of the overlay,
@@ -198,6 +272,73 @@ public partial class MainWindow : Window
         // rather than opening a search box the user can't see.
         if (action == GamepadAction.ToggleSearch && vm.SelectedScreen == AppScreen.Library) vm.ToggleSearchCommand.Execute(null);
         if (action == GamepadAction.Power) OpenPowerMenu();
+    }
+
+    /// <summary>Moves keyboard focus in <paramref name="direction"/> from whatever's currently focused —
+    /// the plain-element fallback for the Settings/Search and context-menu guards above, once Slider/
+    /// ComboBox (which need their value adjusted, not their focus moved) have been special-cased out.</summary>
+    private static void MoveFocusFrom(FocusNavigationDirection direction)
+    {
+        bool moved = (Keyboard.FocusedElement as UIElement)?.MoveFocus(new TraversalRequest(direction)) ?? false;
+        Debug.WriteLine($"[MainWindow] MoveFocus {direction} -> moved={moved}, focused={Keyboard.FocusedElement}");
+    }
+
+    /// <summary>D-Pad Left/Right on a focused Slider adjusts its value by one SmallChange step instead of
+    /// moving focus off it — Sliders in Settings are laid out horizontally, so Left/Right maps naturally.
+    /// Returns false at Minimum/Maximum (nothing left to adjust) so the caller falls back to MoveFocus
+    /// instead of trapping the D-Pad on a slider that's already maxed/minned out.</summary>
+    private static bool AdjustSlider(Slider slider, int direction)
+    {
+        double newValue = Math.Clamp(slider.Value + direction * slider.SmallChange, slider.Minimum, slider.Maximum);
+        if (newValue == slider.Value) return false;
+        Debug.WriteLine($"[MainWindow] Slider {slider.Value} -> {newValue}");
+        slider.Value = newValue;
+        return true;
+    }
+
+    /// <summary>D-Pad Up/Down on a focused ComboBox cycles its selection instead of moving focus off it —
+    /// simpler than opening the dropdown Popup and navigating a separate focus scope inside it, and gives
+    /// the same end result (a different value picked) with one D-Pad press per step instead of two.
+    /// Returns false at the first/last item so the caller falls back to MoveFocus instead of trapping the
+    /// D-Pad on a ComboBox that's already at either end of its list.</summary>
+    private static bool AdjustComboBox(ComboBox combo, int direction)
+    {
+        if (combo.Items.Count == 0) return false;
+        int newIndex = Math.Clamp(combo.SelectedIndex + direction, 0, combo.Items.Count - 1);
+        if (newIndex == combo.SelectedIndex) return false;
+        Debug.WriteLine($"[MainWindow] ComboBox {combo.SelectedIndex} -> {newIndex}");
+        combo.SelectedIndex = newIndex;
+        return true;
+    }
+
+    /// <summary>Confirm (A/✕) on whatever's focused in Settings/Search — mirrors what a real click on that
+    /// control would do, dispatched by type since there's no single WPF API that means "activate this."</summary>
+    private static void ConfirmFocused()
+    {
+        switch (Keyboard.FocusedElement)
+        {
+            // RadioButton before ToggleButton: it derives from ToggleButton, and clicking an already-checked
+            // RadioButton in real WPF never unchecks it (only checking a different one in the group does) —
+            // toggling it via IsChecked = !IsChecked like a plain CheckBox would leave the group with nothing
+            // selected.
+            case RadioButton radio: radio.IsChecked = true; break;
+            case ToggleButton toggle: toggle.IsChecked = !(toggle.IsChecked ?? false); break;
+            case ComboBox combo: combo.IsDropDownOpen = !combo.IsDropDownOpen; break;
+            case ButtonBase button: button.Command?.Execute(button.CommandParameter); break;
+        }
+        Debug.WriteLine($"[MainWindow] ConfirmFocused on {Keyboard.FocusedElement}");
+    }
+
+    /// <summary>Walks up the visual tree from <paramref name="node"/> looking for <paramref name="ancestor"/> —
+    /// used to check whether the currently focused element is actually inside the Settings panel before
+    /// trusting MoveFocus to start from it (see the Settings/Search guard above).</summary>
+    private static bool IsDescendantOf(DependencyObject ancestor, DependencyObject node)
+    {
+        for (var current = node; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (ReferenceEquals(current, ancestor)) return true;
+        }
+        return false;
     }
 
     /// <summary>Keyboard/gamepad nav for the Recently Played screen: a fixed 3-row x 2-col layout where row 0
@@ -248,6 +389,11 @@ public partial class MainWindow : Window
         vm.SelectedScreen = screens[(index + direction + screens.Length) % screens.Length];
     }
 
+    /// <summary>Tracked while a gamepad-opened context menu is up, so HandleGamepadAction's top-of-method
+    /// guard can route D-Pad/Confirm/Back into it (see there) instead of falling through to the Library
+    /// grid navigation underneath.</summary>
+    private ContextMenu? _openGameContextMenu;
+
     /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Options
     /// equivalent of right-clicking a tile (Xbox "Menu"/hamburger button, PS "Options" button). Effectively only
     /// reachable when no game is running — the window is minimized while a game runs (App.LaunchSelected), and
@@ -255,10 +401,33 @@ public partial class MainWindow : Window
     private void OpenGameContextMenu(MainViewModel vm)
     {
         if (vm.SelectedGame is null) return;
-        if (LibraryScreen.GameGrid.ItemContainerGenerator.ContainerFromItem(vm.SelectedGame) is not ListBoxItem { ContextMenu: { } menu } container) return;
 
-        menu.PlacementTarget = container;
-        menu.IsOpen = true;
+        // Scrolling into view first, then waiting a layout pass before opening, matters for virtualized
+        // items: a container that was just scrolled to (or hasn't been arranged since the last scroll) can
+        // still report a stale/zero-size RenderSize the instant this runs, which throws the Popup's Center
+        // placement math off — the menu would open somewhere other than the tile even though PlacementTarget
+        // is correct.
+        LibraryScreen.GameGrid.ScrollIntoView(vm.SelectedGame);
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (LibraryScreen.GameGrid.ItemContainerGenerator.ContainerFromItem(vm.SelectedGame) is not ListBoxItem { ContextMenu: { } menu } container)
+            {
+                Debug.WriteLine("[MainWindow] OpenGameContextMenu: no container found for selected game");
+                return;
+            }
+
+            Debug.WriteLine($"[MainWindow] OpenGameContextMenu: anchoring to container at {container.PointToScreen(new Point(0, 0))}, size={container.RenderSize}");
+
+            // ContextMenu.Placement defaults to MousePoint, which opened this wherever the emulated cursor last
+            // sat rather than near the tile a gamepad press has no mouse position to anchor to — pin it to the
+            // tile itself instead, same as a real console dashboard's per-item options menu.
+            menu.Placement = PlacementMode.Center;
+            menu.PlacementTarget = container;
+            _openGameContextMenu = menu;
+            menu.Closed += (_, _) => _openGameContextMenu = null;
+            menu.IsOpen = true;
+            Dispatcher.BeginInvoke(() => menu.Items.OfType<MenuItem>().FirstOrDefault()?.Focus());
+        }, DispatcherPriority.Loaded);
     }
 
     /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>

@@ -1,0 +1,24 @@
+<Window x:Class="CartridgeOS.Launcher.CursorLockIndicatorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cursor Lock"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="Manual"
+        ShowActivated="False"
+        IsHitTestVisible="False">
+    <Border CornerRadius="8" Padding="12,8"
+            Background="{StaticResource SurfaceRaisedBrush}"
+            BorderThickness="1" BorderBrush="{StaticResource BrandCyanBrush}">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                       Foreground="{StaticResource BrandCyanBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="Cursor Locked — use D-Pad to navigate" Foreground="{StaticResource TextPrimaryBrush}"
+                       FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+        </StackPanel>
+    </Border>
+</Window>

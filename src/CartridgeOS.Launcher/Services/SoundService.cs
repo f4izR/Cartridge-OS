@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Media;
 
@@ -36,16 +37,18 @@ public static class SoundService
         return player;
     }
 
-    private static void Play(Lazy<SoundPlayer> sound, bool enabled)
+    private static void Play(Lazy<SoundPlayer> sound, bool enabled, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        if (!enabled) return;
+        if (!enabled) { Debug.WriteLine($"[Sound] {caller}: skipped, disabled in Settings"); return; }
         try
         {
             sound.Value.Play();
+            Debug.WriteLine($"[Sound] {caller}: played");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // ponytail: a missing/corrupt sound file must never break navigation or launching.
+            Debug.WriteLine($"[Sound] {caller}: threw {ex.GetType().Name}: {ex.Message}");
         }
     }
 }

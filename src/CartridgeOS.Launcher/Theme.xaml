@@ -56,10 +56,15 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
+        <!-- The template below draws its own focus ring (see IsKeyboardFocused trigger) — the default
+             dashed-rectangle focus adorner barely reads against this dark theme, so it's suppressed here
+             rather than layered underneath a second, more visible indicator. -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="8"
+                            BorderBrush="Transparent" BorderThickness="2">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}" />
                     </Border>
@@ -69,6 +74,12 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandCyanPressedBrush}" />
+                        </Trigger>
+                        <!-- The currently D-Pad/keyboard-selected button in a focus-navigable list (Power
+                             menu, Settings, game context menu) — previously relied on the near-invisible
+                             default focus adorner, which read as "nothing is highlighted." -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

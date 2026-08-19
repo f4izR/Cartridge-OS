@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -31,7 +32,14 @@ public partial class OverlayWindow : Window, IGamepadInputTarget
             // otherwise only the hardcoded Menu-toggle reaches it and every other button (D-pad/Confirm)
             // falls through to the launcher window underneath instead of the overlay's own buttons.
             ((App)Application.Current).SetModalGamepadTarget(this);
+            // A running fullscreen game is actively fighting this window for OS-level foreground/input
+            // focus (many games re-assert SetForegroundWindow on themselves) — Focus() alone only sets
+            // WPF's own logical keyboard focus, not real OS focus, so Activate() first to actually win it,
+            // otherwise HandleAction's Keyboard.FocusedElement checks below can end up empty/stale even
+            // though this window is visibly on top.
+            Activate();
             ReturnButton.Focus();
+            Debug.WriteLine($"[Overlay] Loaded: focused={Keyboard.FocusedElement}, IsActive={IsActive}");
         };
         Closed += (_, _) => ((App)Application.Current).SetModalGamepadTarget(null);
 
@@ -55,6 +63,7 @@ public partial class OverlayWindow : Window, IGamepadInputTarget
 
     public void HandleAction(GamepadAction action)
     {
+        Debug.WriteLine($"[Overlay] HandleAction({action}): focused={Keyboard.FocusedElement}, IsActive={IsActive}");
         switch (action)
         {
             case GamepadAction.Confirm: (Keyboard.FocusedElement as Button)?.Command?.Execute(null); break;

@@ -53,6 +53,8 @@ public partial class App : Application
     /// controller actually connected (Xbox "A"/"B", PlayStation "✕"/"○", etc.) — see ControllerGlyphs.</summary>
     internal ControllerKind? CurrentController => _currentController;
     private IGamepadInputTarget? _modalGamepadTarget;
+    private bool _cursorLocked; // toggled by LT+RT — see OnGamepadAction/OnRightStickMoved
+    private CursorLockIndicatorWindow _cursorLockIndicator = null!; // created in OnStartup, lives for the app's lifetime
     private GlobalHotkey? _overlayHotkey;
     private DiscordRichPresence? _discord;
 
@@ -128,6 +130,8 @@ public partial class App : Application
         _coreWindow = new Window { Width = 0, Height = 0, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Visibility = Visibility.Hidden };
         new WindowInteropHelper(_coreWindow).EnsureHandle();
 
+        _cursorLockIndicator = new CursorLockIndicatorWindow(); // hidden until SetLocked(true) — see OnGamepadAction
+
         _gamepad = new GamepadWatcher();
         _mouse = new MouseEmulator();
         _gamepad.ActionPressed += OnGamepadAction;
@@ -196,9 +200,27 @@ public partial class App : Application
         _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo never sees this — tracked separately for CheckIdle
         Dispatcher.BeginInvoke(() =>
         {
+            // LT+RT together — freezes/unfreezes the stick-driven cursor (see OnRightStickMoved) so a
+            // drifting stick can't fight D-Pad-only navigation. Live everywhere, even over a modal dialog.
+            if (action == GamepadAction.ToggleCursorLock)
+            {
+                _cursorLocked = !_cursorLocked;
+                Debug.WriteLine($"[App] ToggleCursorLock -> _cursorLocked={_cursorLocked}");
+                SoundService.PlayConfirm();
+                _cursorLockIndicator.SetLocked(_cursorLocked);
+                return;
+            }
+
             // A modal dialog (e.g. ArtworkCropWindow) takes over entirely while it's open — its input must
             // never also reach the launcher window underneath (double-handling a Confirm/Back press).
-            if (_modalGamepadTarget is { } target) { target.HandleAction(action); return; }
+            if (_modalGamepadTarget is { } target)
+            {
+                Debug.WriteLine($"[App] {action} -> modal target {target.GetType().Name}");
+                target.HandleAction(action);
+                return;
+            }
+
+            Debug.WriteLine($"[App] {action} -> launcher window (running game: {_runningGameProcess is not null})");
 
             // Power (the Guide/Xbox/PS button, see GamepadWatcher.ActionMap) means two things depending on
             // context: toggle the in-game overlay while a game is running (works with no launcher window open,
@@ -215,8 +237,9 @@ public partial class App : Application
     private void OnRightStickMoved(float x, float y)
     {
         _lastGamepadActivityUtc = DateTime.UtcNow;
-        if (_modalGamepadTarget is { } target) Dispatcher.BeginInvoke(() => target.HandleRightStick(x, y));
-        else _mouse!.Move(x, y); // pure Win32 P/Invoke, not a WPF object — safe to call straight from the poll thread, no Dispatcher needed
+        if (_modalGamepadTarget is { } target) { Dispatcher.BeginInvoke(() => target.HandleRightStick(x, y)); return; }
+        if (_cursorLocked) return; // stick-driven cursor suspended — use D-Pad instead (see OnGamepadAction ToggleCursorLock)
+        _mouse!.Move(x, y); // pure Win32 P/Invoke, not a WPF object — safe to call straight from the poll thread, no Dispatcher needed
     }
 
     private void OnRightTriggerChanged(bool held)
@@ -535,6 +558,7 @@ public partial class App : Application
         _discord?.Dispose();
         CloseOverlay();
         _launcherWindow?.Close();
+        _cursorLockIndicator?.Close();
         _trayIcon?.Dispose();
         _coreWindow?.Close();
 

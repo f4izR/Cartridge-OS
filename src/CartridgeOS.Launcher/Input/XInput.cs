@@ -49,8 +49,14 @@ internal struct XInputBatteryInformation
 internal static class XInput
 {
     // Deadzone values recommended by Microsoft for each thumbstick.
-    public const short LeftThumbDeadzone = 7849;
-    public const short RightThumbDeadzone = 8689;
+    // ponytail: both bumped above Microsoft's stock values (7849 / 8689) — GamepadWatcher folds the left
+    // stick into the same D-Pad bits (ToDirectionBits), so a worn/drifting left stick that never quite
+    // recenters holds a phantom direction "pressed" and fights real D-Pad input; the right stick drives the
+    // mouse cursor directly (App.OnRightStickMoved), so its drift instead creeps the cursor. Bump further
+    // (max 32767) if a specific pad still misbehaves; a real fix would expose this as a per-controller
+    // calibration setting instead of one fixed constant for every pad.
+    public const short LeftThumbDeadzone = 12000;
+    public const short RightThumbDeadzone = 13000;
 
     private const byte BatteryDevTypeGamepad = 0;
     private const byte BatteryTypeDisconnected = 0x00;

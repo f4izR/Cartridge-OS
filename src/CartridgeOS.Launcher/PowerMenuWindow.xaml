@@ -20,11 +20,13 @@
             <Button Content="Shut Down Cartridge OS" Command="{Binding ShutDownCartridgeOsCommand}"
                     Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button Content="Restart System" Command="{Binding RestartSystemCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}"
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    BorderThickness="0" Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+                    Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button Content="Turn Off System" Command="{Binding TurnOffSystemCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}"
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    BorderThickness="0" Padding="10,8" HorizontalAlignment="Stretch" />
+                    Padding="10,8" HorizontalAlignment="Stretch" />
 
             <TextBlock Foreground="{StaticResource TextMutedBrush}"
                        FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center" TextWrapping="Wrap">

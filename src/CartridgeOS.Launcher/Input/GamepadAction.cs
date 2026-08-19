@@ -28,4 +28,8 @@ public enum GamepadAction
     /// <summary>Opens/closes the power menu (Turn Off System / Restart System / Exit to Desktop / Shut
     /// Down Cartridge OS) — Xbox Start button, previously unbound.</summary>
     Power,
+
+    /// <summary>Both triggers (LT+RT) held together — freezes/unfreezes the stick-driven mouse cursor, so a
+    /// worn stick's drift can't push the cursor around while D-Pad-only navigation is being used instead.</summary>
+    ToggleCursorLock,
 }

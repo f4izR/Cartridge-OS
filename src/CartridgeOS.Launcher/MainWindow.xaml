@@ -265,7 +265,7 @@
         </Grid>
 
         <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
-        <views:SettingsPanel Grid.Column="1" />
+        <views:SettingsPanel x:Name="SettingsHost" Grid.Column="1" />
 
         <!-- Error toast — top-center, above everything else (last in z-order). The fullscreen kiosk shell
              has no title bar/status bar for a background failure (a scanner throwing, a DB write failing)
