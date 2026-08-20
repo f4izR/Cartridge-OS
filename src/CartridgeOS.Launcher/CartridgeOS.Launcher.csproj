@@ -38,7 +38,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- Source of truth for UpdateChecker's version comparison and the installer's AppVersion
          (installer/CartridgeOS.iss) — bump both together on release. -->
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
 </Project>
