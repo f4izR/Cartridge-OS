@@ -54,7 +54,6 @@ public partial class App : Application
     internal ControllerKind? CurrentController => _currentController;
     private IGamepadInputTarget? _modalGamepadTarget;
     private bool _cursorLocked; // toggled by LT+RT — see OnGamepadAction/OnRightStickMoved
-    private CursorLockIndicatorWindow _cursorLockIndicator = null!; // created in OnStartup, lives for the app's lifetime
     private GlobalHotkey? _overlayHotkey;
     private DiscordRichPresence? _discord;
 
@@ -129,8 +128,6 @@ public partial class App : Application
         // outlives the launcher window being opened and closed repeatedly.
         _coreWindow = new Window { Width = 0, Height = 0, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Visibility = Visibility.Hidden };
         new WindowInteropHelper(_coreWindow).EnsureHandle();
-
-        _cursorLockIndicator = new CursorLockIndicatorWindow(); // hidden until SetLocked(true) — see OnGamepadAction
 
         _gamepad = new GamepadWatcher();
         _mouse = new MouseEmulator();
@@ -207,7 +204,13 @@ public partial class App : Application
                 _cursorLocked = !_cursorLocked;
                 Debug.WriteLine($"[App] ToggleCursorLock -> _cursorLocked={_cursorLocked}");
                 SoundService.PlayConfirm();
-                _cursorLockIndicator.SetLocked(_cursorLocked);
+                // Indicator lives in-window now (header pill / overlay footer line), not a floating
+                // always-on-top badge — that used to render over games and other apps, and stealing
+                // focus back to it (however briefly) was what made the lock only "take" while it was
+                // the topmost window. Pushing state into whichever of our own windows is open sidesteps
+                // both problems.
+                _launcherWindow?.UpdateCursorLocked(_cursorLocked);
+                if (_overlayWindow?.DataContext is OverlayViewModel overlayVm) overlayVm.IsCursorLocked = _cursorLocked;
                 return;
             }
 
@@ -237,6 +240,11 @@ public partial class App : Application
     private void OnRightStickMoved(float x, float y)
     {
         _lastGamepadActivityUtc = DateTime.UtcNow;
+        // Never move the real OS cursor while some other app (most importantly a running game) has
+        // focus — regardless of lock state. Before this guard, a drifting/off-center stick kept
+        // nudging the cursor even while alt-tabbed away or while a fullscreen game had real input
+        // focus, which is never useful and can fight the game's own input.
+        if (!CartridgeOS.Launcher.MainWindow.IsForegroundWindowInThisProcess()) return; // qualified: `MainWindow` unqualified here resolves to Application.MainWindow, not the type
         if (_modalGamepadTarget is { } target) { Dispatcher.BeginInvoke(() => target.HandleRightStick(x, y)); return; }
         if (_cursorLocked) return; // stick-driven cursor suspended — use D-Pad instead (see OnGamepadAction ToggleCursorLock)
         _mouse!.Move(x, y); // pure Win32 P/Invoke, not a WPF object — safe to call straight from the poll thread, no Dispatcher needed
@@ -335,6 +343,7 @@ public partial class App : Application
         {
             _launcherWindow = new MainWindow(_lastSelectedGameId);
             _launcherWindow.UpdateControllerBattery(_gamepad?.ControllerBatteryPercent);
+            _launcherWindow.UpdateCursorLocked(_cursorLocked);
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
 
@@ -375,7 +384,7 @@ public partial class App : Application
             return;
         }
 
-        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame, _currentController);
+        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame, _currentController) { IsCursorLocked = _cursorLocked };
         _overlayWindow = new OverlayWindow(overlayVm);
         _overlayWindow.Closed += (_, _) => _overlayWindow = null;
         _overlayWindow.Show();
@@ -498,36 +507,44 @@ public partial class App : Application
         try
         {
             process.EnableRaisingEvents = true;
-            process.Exited += (_, _) => Dispatcher.BeginInvoke(() =>
-            {
-                // Some apps (a fair few Electron/Squirrel-installed ones — Trello, Discord, Slack, VS Code)
-                // launch via a thin stub/updater .exe that spawns the real, longer-lived process and then
-                // exits itself within a second or two — so *our* tracked Process.Exited fires almost
-                // immediately even though the app the user actually cares about is still very much open.
-                // Left unguarded, that made the screen saver ignore a genuinely-still-running app (the
-                // "game running" idle-suppression check only looks at _runningGameProcess) and recorded a
-                // few seconds of bogus playtime instead of the real session. Heuristic fix: if another
-                // process sharing the same exe name is still alive, treat this as the stub exiting, not the
-                // app — keep _runningGameProcess set (still non-null is all CheckIdle/ToggleOverlay actually
-                // need) and skip recording playtime/OnGameExited for this exit. We won't get a second,
-                // accurate playtime/exit signal when the real process eventually closes — a real limitation
-                // of this heuristic, not attempted here (would need polling for the survivor's own exit).
-                string exeName = Path.GetFileNameWithoutExtension(game.ExecutablePath);
-                if (Process.GetProcessesByName(exeName).Length > 0) return;
-
-                // Rounded up, with a 1-minute floor — a real session (however short) should always show
-                // *something* rather than silently vanishing. The previous floor-and-skip-if-zero logic
-                // ((int)TotalMinutes, only recorded if > 0) meant any session under 60 real seconds recorded
-                // no playtime at all, which is exactly what a quick manual test looks like.
-                int minutes = Math.Max(1, (int)Math.Ceiling((DateTime.UtcNow - startedAtUtc).TotalMinutes));
-                vm.RecordPlaytime(game, minutes);
-                OnGameExited();
-            });
+            process.Exited += (_, _) => _ = HandleGameProcessExitedAsync(vm, game, startedAtUtc);
         }
         catch (InvalidOperationException)
         {
             // already exited before we could attach — nothing left to track
         }
+    }
+
+    private static readonly TimeSpan RestarterRecheckDelay = TimeSpan.FromSeconds(2);
+
+    // Some apps (a fair few Electron/Squirrel-installed ones — Trello, Discord, Slack, VS Code — plus
+    // some games, confirmed live with CS2) launch via a thin stub/updater .exe that spawns the real,
+    // longer-lived process and then exits itself within a second or two — so *our* tracked
+    // Process.Exited fires almost immediately even though the app the user actually cares about is
+    // still very much open. Left unguarded, that made the screen saver ignore a genuinely-still-running
+    // app and, worse, brought the launcher window back (OnGameExited -> ShowLauncher) right on top of
+    // the game for a moment before the real process took the foreground back — the "minimizes then
+    // instantly maximizes" glitch. Heuristic fix: if another process sharing the same exe name is
+    // alive, treat this as the stub exiting, not the app. The immediate check alone still raced the
+    // replacement process starting, so this rechecks once more after a short delay before giving up.
+    private async Task HandleGameProcessExitedAsync(MainViewModel vm, GameTileViewModel game, DateTime startedAtUtc)
+    {
+        string exeName = Path.GetFileNameWithoutExtension(game.ExecutablePath);
+        if (Process.GetProcessesByName(exeName).Length > 0) return;
+
+        await Task.Delay(RestarterRecheckDelay);
+        if (Process.GetProcessesByName(exeName).Length > 0) return; // ponytail: fixed recheck delay, not a full process-tree watch — good enough to dodge the restart race
+
+        await Dispatcher.BeginInvoke(() =>
+        {
+            // Rounded up, with a 1-minute floor — a real session (however short) should always show
+            // *something* rather than silently vanishing. The previous floor-and-skip-if-zero logic
+            // ((int)TotalMinutes, only recorded if > 0) meant any session under 60 real seconds recorded
+            // no playtime at all, which is exactly what a quick manual test looks like.
+            int minutes = Math.Max(1, (int)Math.Ceiling((DateTime.UtcNow - startedAtUtc).TotalMinutes));
+            vm.RecordPlaytime(game, minutes);
+            OnGameExited();
+        });
     }
 
     private static async Task ClearLaunchingAfterDelayAsync(GameTileViewModel game)
@@ -558,7 +575,6 @@ public partial class App : Application
         _discord?.Dispose();
         CloseOverlay();
         _launcherWindow?.Close();
-        _cursorLockIndicator?.Close();
         _trayIcon?.Dispose();
         _coreWindow?.Close();
 

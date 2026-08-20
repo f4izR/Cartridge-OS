@@ -21,9 +21,6 @@ namespace CartridgeOS.Launcher;
 /// </summary>
 public partial class MainWindow : Window
 {
-    // Must match the tile Width + 2*Margin set in the ItemContainerStyle in MainWindow.xaml.
-    private const double TileFootprintWidth = 220 + 2 * 12;
-
     // Home's background is crisp/unblurred now (no dimming) — full opacity crossfade.
     private const double BackgroundArtOpacity = 1.0;
     private const double CustomBackgroundArtOpacity = 1.0;
@@ -70,6 +67,13 @@ public partial class MainWindow : Window
             Activate();
             Focus();
         };
+
+        // MainViewModel.UiScale is seeded from SystemParameters.WorkArea up front (see its own comment),
+        // which covers the normal case with no layout-timing dependency. This just re-syncs it if the
+        // window ends up on a differently-sized monitor than whatever was primary at construction time
+        // (dragged across monitors, or maximized onto a secondary display) — cheap enough to run on every
+        // resize rather than trying to detect only the moves that matter.
+        SizeChanged += (_, _) => vm.UpdateUiScale(ActualWidth);
         Closed += (_, _) =>
         {
             vm.StopBackgroundRescanning();
@@ -207,7 +211,8 @@ public partial class MainWindow : Window
         // since none of those depend on which grid is on screen.
         if (vm.SelectedScreen == AppScreen.Library && visibleGames.Count > 0)
         {
-            int columns = Math.Max(1, (int)(LibraryScreen.GameGrid.ActualWidth / TileFootprintWidth));
+            double tileFootprintWidth = vm.TileWidth + 2 * 12; // must match the tile Width + Margin in LibraryView.xaml's GameTileStyle
+            int columns = Math.Max(1, (int)(LibraryScreen.GameGrid.ActualWidth / tileFootprintWidth));
             int index = vm.SelectedGame is null ? 0 : visibleGames.IndexOf(vm.SelectedGame);
             if (index < 0) index = 0; // selected game got filtered out from under us
 
@@ -433,6 +438,9 @@ public partial class MainWindow : Window
     /// <summary>Forwarded by App from GamepadWatcher.ControllerBatteryChanged, and pushed once with the current value right after this window is created.</summary>
     public void UpdateControllerBattery(int? percent) => ((MainViewModel)DataContext).ControllerBatteryPercent = percent;
 
+    /// <summary>Forwarded by App on LT+RT toggle, and pushed once with the current value right after this window is created — the header pill is the only lock indicator now (see App.OnGamepadAction).</summary>
+    public void UpdateCursorLocked(bool locked) => ((MainViewModel)DataContext).IsCursorLocked = locked;
+
     public void ShowUpdateAvailable(string version, string releaseUrl) => ((MainViewModel)DataContext).ShowUpdateAvailable(version, releaseUrl);
 
     private PowerMenuWindow? _powerMenuWindow;
@@ -474,8 +482,9 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
     /// <summary>True if whatever's currently in the foreground (or nothing — 0 while a window is
-    /// mid-transition) belongs to this same process, e.g. one of our own dialogs taking focus.</summary>
-    private static bool IsForegroundWindowInThisProcess()
+    /// mid-transition) belongs to this same process, e.g. one of our own dialogs taking focus.
+    /// internal (not private) — App reuses this to gate the stick-driven cursor to our own windows.</summary>
+    internal static bool IsForegroundWindowInThisProcess()
     {
         IntPtr foreground = GetForegroundWindow();
         if (foreground == IntPtr.Zero) return true;

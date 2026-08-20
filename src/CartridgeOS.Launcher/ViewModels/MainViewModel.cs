@@ -432,6 +432,67 @@ public sealed class MainViewModel : ViewModelBase
 
     public string ConnectivityLabel => IsOnline ? "ONLINE" : "OFFLINE";
 
+    private bool _isCursorLocked;
+    /// <summary>Mirrors App's LT+RT toggle — drives the header's lock pill. See App.OnGamepadAction/OnRightStickMoved.</summary>
+    public bool IsCursorLocked
+    {
+        get => _isCursorLocked;
+        set => SetProperty(ref _isCursorLocked, value);
+    }
+
+    // Tile sizes (LibraryView's GameTileStyle, HomeView's carousel) were fixed pixel values designed
+    // against a 1920px-wide display — fine on a desktop monitor, oversized on a smaller laptop screen.
+    // UiScale shrinks them proportionally on narrower displays; never grows past the 1:1 design size on
+    // anything 1920px or wider, since that's the size that was actually tuned to look right.
+    private const double ReferenceScreenWidth = 1920;
+    private const double MinUiScale = 0.55; // ponytail: floor so tiles never shrink past legibility — no real testing below ~1280px wide
+    public const double BaseTileWidth = 220, BaseTileHeight = 300; // must match LibraryView.xaml's GameTileStyle design size
+
+    private double _uiScale = Math.Clamp(SystemParameters.WorkArea.Width / ReferenceScreenWidth, MinUiScale, 1.0);
+    /// <summary>1.0 at the reference 1920px width, shrinking toward <see cref="MinUiScale"/> on narrower
+    /// screens. Set from <see cref="SystemParameters.WorkArea"/> up front (available immediately, unlike
+    /// MainWindow's own ActualWidth which needs a layout pass) and re-synced by MainWindow on SizeChanged
+    /// for the rarer case of the window moving to a differently-sized monitor mid-session.</summary>
+    public double UiScale
+    {
+        get => _uiScale;
+        set
+        {
+            if (!SetProperty(ref _uiScale, value)) return;
+            OnPropertyChanged(nameof(TileWidth));
+            OnPropertyChanged(nameof(TileHeight));
+            OnPropertyChanged(nameof(HomeCenterWidth));
+            OnPropertyChanged(nameof(HomeCenterHeight));
+            OnPropertyChanged(nameof(HomeSideWidth));
+            OnPropertyChanged(nameof(HomeSideHeight));
+            OnPropertyChanged(nameof(HomeSlotPitch));
+            OnPropertyChanged(nameof(HomeCarouselCanvasWidth));
+            OnPropertyChanged(nameof(HomeCarouselCanvasHeight));
+        }
+    }
+
+    public double TileWidth => Math.Round(BaseTileWidth * UiScale);
+    public double TileHeight => Math.Round(BaseTileHeight * UiScale);
+
+    // Same story as the Library tile sizes above — HomeView's carousel (HomeView.xaml.cs's ApplyOffset)
+    // reads all its pixel dimensions from here instead of owning its own constants, so both screens scale
+    // off one shared source of truth.
+    public const double BaseHomeCenterWidth = 260, BaseHomeCenterHeight = 430;
+    public const double BaseHomeSideWidth = 190, BaseHomeSideHeight = 320;
+    public const double BaseHomeSlotPitch = 250;
+
+    public double HomeCenterWidth => Math.Round(BaseHomeCenterWidth * UiScale);
+    public double HomeCenterHeight => Math.Round(BaseHomeCenterHeight * UiScale);
+    public double HomeSideWidth => Math.Round(BaseHomeSideWidth * UiScale);
+    public double HomeSideHeight => Math.Round(BaseHomeSideHeight * UiScale);
+    public double HomeSlotPitch => Math.Round(BaseHomeSlotPitch * UiScale);
+    /// <summary>Matches the Canvas size in HomeView.xaml — (2*HomeCarouselSideCount+1) slots wide at the current pitch.</summary>
+    public double HomeCarouselCanvasWidth => (2 * HomeCarouselSideCount + 1) * HomeSlotPitch;
+    public double HomeCarouselCanvasHeight => HomeCenterHeight;
+
+    /// <summary>Re-derives <see cref="UiScale"/> from an actual window width — see MainWindow's SizeChanged hook.</summary>
+    public void UpdateUiScale(double windowWidth) => UiScale = Math.Clamp(windowWidth / ReferenceScreenWidth, MinUiScale, 1.0);
+
     private string _currentTimeText = "";
     public string CurrentTimeText
     {

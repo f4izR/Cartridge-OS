@@ -190,6 +190,19 @@
                 </Border>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- LT+RT toggle (App.OnGamepadAction) — replaces an earlier always-on-top floating badge,
+                         which rendered over games/other apps and only worked while it happened to be visible.
+                         A header pill only shows up when this window itself is actually on top. -->
+                    <Border Style="{StaticResource StatusPillStyle}"
+                            Visibility="{Binding IsCursorLocked, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       Foreground="{StaticResource BrandCyanBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="CURSOR LOCKED" Foreground="{StaticResource BrandCyanBrush}"
+                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Battery: whichever device actually has one to report — a connected controller if it reports a level, otherwise this machine's own. -->
                     <Border Style="{StaticResource StatusPillStyle}"
                             Visibility="{Binding HasBatteryInfo, Converter={StaticResource BoolToVisibility}}">

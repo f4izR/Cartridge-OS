@@ -61,9 +61,15 @@ internal static class RawGameControllerSource
         gamepad.sThumbLX = ToShort(0, invert: false);
         gamepad.sThumbLY = ToShort(1, invert: true);
         gamepad.sThumbRX = ToShort(2, invert: false);
-        gamepad.sThumbRY = ToShort(3, invert: true);
-        gamepad.bLeftTrigger = ToByte(4);
-        gamepad.bRightTrigger = ToByte(5);
+        // ponytail: confirmed live on a DualShock 4 — this pad's RawGameController report puts L2/R2
+        // between RX and RY (axes 3,4), with RY last (axis 5), not the LX,LY,RX,RY,L2,R2 order assumed
+        // above for buttons. Reading axis 3 as RY (the old code) meant every poll fed a trigger's
+        // rest-at-0 reading through the inverted stick formula, which pins to full deflection — that's
+        // exactly the "cursor drifts up by itself" bug. And axis 5 (the real RY) was being read as R2,
+        // so pulling the stick down was misread as a right-click. Swap fixes both.
+        gamepad.bLeftTrigger = ToByte(3);
+        gamepad.bRightTrigger = ToByte(4);
+        gamepad.sThumbRY = ToShort(5, invert: true);
         return true;
     }
 

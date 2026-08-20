@@ -17,6 +17,11 @@
             <TextBlock Text="{Binding GameTitle}" Foreground="{StaticResource TextPrimaryBrush}"
                        FontSize="18" FontWeight="Bold" TextWrapping="Wrap" Margin="0,2,0,14" />
 
+            <TextBlock Foreground="{StaticResource BrandCyanBrush}" FontSize="11" Margin="0,0,0,10"
+                       Visibility="{Binding IsCursorLocked, Converter={StaticResource BoolToVisibility}}">
+                <Run Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" /><Run Text=" Cursor Locked" />
+            </TextBlock>
+
             <Button x:Name="ReturnButton" Content="Return to Cartridge OS" Command="{Binding ReturnCommand}"
                     Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button x:Name="QuitButton" Content="Quit Game" Command="{Binding QuitGameCommand}"

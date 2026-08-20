@@ -10,16 +10,13 @@ namespace CartridgeOS.Launcher.Views;
 
 public partial class HomeView : UserControl
 {
-    // Tile sizes and horizontal spacing for the carousel — kept here rather than in the DataTemplate
-    // since position and size are computed together (ApplyOffset) and driven by code, not XAML triggers.
-    // Heights sized so the image row (tile height minus the title row beneath it) lands close to a 2:3
-    // portrait box-art ratio at each tile's width — the old 360/264 heights made the image row noticeably
-    // wider than 2:3, so UniformToFill (see HomeView.xaml's ArtworkImage) had to crop a lot more off the
-    // top/bottom than real box art needs, cropping in on characters/logos. Widths unchanged.
-    private const double CenterWidth = 260, CenterHeight = 430;
-    private const double SideWidth = 190, SideHeight = 320;
-    private const double SlotPitch = 250; // horizontal distance between adjacent offsets' centers
-    private const double CanvasCenterX = (2 * MainViewModel.HomeCarouselSideCount + 1) * SlotPitch / 2; // matches the Canvas width in HomeView.xaml
+    // Tile sizes and horizontal spacing for the carousel come from MainViewModel (HomeCenterWidth etc.,
+    // scaled by UiScale for the display size — see its own comments) rather than being owned here, so
+    // Home's tiles shrink in step with Library's on a smaller screen. Position/size are still computed
+    // together (ApplyOffset) and driven by code, not XAML triggers, since that's what makes the carousel
+    // slide and grow/shrink instead of snapping. Heights are tuned so the image row (tile height minus the
+    // title row beneath it) lands close to a 2:3 portrait box-art ratio at each tile's width — see
+    // MainViewModel.BaseHomeCenterHeight etc.
     private static readonly TimeSpan SlideDuration = TimeSpan.FromMilliseconds(340);
 
     public HomeView()
@@ -56,27 +53,28 @@ public partial class HomeView : UserControl
     {
         var tile = (FrameworkElement)sender;
         if (tile.DataContext is not HomeCarouselSlot slot) return;
+        if (DataContext is not MainViewModel vm) return;
         // Canvas.Left/Top only positions a Canvas's direct children — that's the ContentPresenter WPF
         // generates for each item, not this DataTemplate's own root ("tile"), which sits one level deeper.
         if (VisualTreeHelper.GetParent(tile) is not FrameworkElement container) return;
 
-        ApplyOffset(tile, container, slot.Offset, animate: false);
+        ApplyOffset(vm, tile, container, slot.Offset, animate: false);
 
         PropertyChangedEventHandler handler = (_, args) =>
         {
-            if (args.PropertyName == nameof(HomeCarouselSlot.Offset)) ApplyOffset(tile, container, slot.Offset, animate: true);
+            if (args.PropertyName == nameof(HomeCarouselSlot.Offset)) ApplyOffset(vm, tile, container, slot.Offset, animate: true);
         };
         slot.PropertyChanged += handler;
         tile.Unloaded += (_, _) => slot.PropertyChanged -= handler;
     }
 
-    private static void ApplyOffset(FrameworkElement tile, FrameworkElement container, int offset, bool animate)
+    private static void ApplyOffset(MainViewModel vm, FrameworkElement tile, FrameworkElement container, int offset, bool animate)
     {
         bool isCenter = offset == 0;
-        double width = isCenter ? CenterWidth : SideWidth;
-        double height = isCenter ? CenterHeight : SideHeight;
-        double left = CanvasCenterX + offset * SlotPitch - width / 2;
-        double top = CenterHeight - height; // bottom-aligned: tiles grow upward from a shared baseline
+        double width = isCenter ? vm.HomeCenterWidth : vm.HomeSideWidth;
+        double height = isCenter ? vm.HomeCenterHeight : vm.HomeSideHeight;
+        double left = vm.HomeCarouselCanvasWidth / 2 + offset * vm.HomeSlotPitch - width / 2;
+        double top = vm.HomeCenterHeight - height; // bottom-aligned: tiles grow upward from a shared baseline
 
         if (!animate)
         {

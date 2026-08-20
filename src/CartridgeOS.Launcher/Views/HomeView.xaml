@@ -55,7 +55,8 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Margin="0" CornerRadius="9" Background="{StaticResource SurfaceHoverBrush}">
-                        <TextBlock Text="🎮" FontSize="40" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4" />
+                        <TextBlock Text="🎮" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4"
+                                   FontSize="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.UiScale, Converter={StaticResource Scale}, ConverterParameter=40}" />
                     </Border>
                     <Border x:Name="ArtworkImage" Grid.Row="0" Margin="0" CornerRadius="9"
                             RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
@@ -74,7 +75,8 @@
                     <Border Grid.RowSpan="2" CornerRadius="12" Background="#B0000000"
                             Visibility="{Binding Game.IsLaunching, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="Launching..." Foreground="{StaticResource TextPrimaryBrush}"
-                                   FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
+                                   FontSize="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.UiScale, Converter={StaticResource Scale}, ConverterParameter=13}"
+                                   FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                 </Grid>
@@ -120,10 +122,12 @@
                 <!-- Cosmetic only — Width/Height/Canvas position are owned by code-behind (see above). -->
                 <DataTrigger Binding="{Binding IsCenter}" Value="True">
                     <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
-                    <Setter TargetName="TitleText" Property="FontSize" Value="18" />
+                    <Setter TargetName="TitleText" Property="FontSize"
+                            Value="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.UiScale, Converter={StaticResource Scale}, ConverterParameter=18}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsCenter}" Value="False">
-                    <Setter TargetName="TitleText" Property="FontSize" Value="14" />
+                    <Setter TargetName="TitleText" Property="FontSize"
+                            Value="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.UiScale, Converter={StaticResource Scale}, ConverterParameter=14}" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -166,7 +170,10 @@
                       HorizontalAlignment="Center">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <Canvas Width="1750" Height="430" />
+                    <!-- Sized off MainViewModel.HomeCarouselCanvasWidth/Height (scaled by UiScale) rather than
+                         the old fixed 1750x430 — must stay in lockstep with HomeView.xaml.cs's ApplyOffset,
+                         which positions tiles using those same view-model dimensions. -->
+                    <Canvas Width="{Binding HomeCarouselCanvasWidth}" Height="{Binding HomeCarouselCanvasHeight}" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>

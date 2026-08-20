@@ -16,6 +16,10 @@ public sealed partial class OverlayViewModel : ViewModelBase
     [ObservableProperty]
     private string _menuButtonLabel;
 
+    /// <summary>Mirrors App's LT+RT toggle — see App.OnGamepadAction/OnRightStickMoved.</summary>
+    [ObservableProperty]
+    private bool _isCursorLocked;
+
     public OverlayViewModel(string gameTitle, Action onReturn, Action onQuitGame, ControllerKind? controller)
     {
         GameTitle = gameTitle;
