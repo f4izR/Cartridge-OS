@@ -460,7 +460,7 @@ public partial class App : Application
         if (IsIconic(handle)) ShowWindow(handle, SwRestore);
         SetForegroundWindow(handle);
 
-        if (_launcherWindow is not null) _launcherWindow.WindowState = WindowState.Minimized;
+        _launcherWindow?.Hide(); // same tray-only behavior as the initial launch — see LaunchGame's comment
         return true;
     }
 
@@ -535,12 +535,17 @@ public partial class App : Application
         // Process.Start returns null below) — only downside there is we can't auto-clear it on exit.
         _ = _discord?.SetActivityAsync(game.Title, DateTimeOffset.UtcNow);
 
-        // Minimize rather than destroy on launch — cheaper, no recreate-flicker for the common case.
-        // The launcher can still be fully closed (X button) while a game runs; that's handled by
-        // OnLauncherClosed same as any other close, independent of this. Unconditional (not just for a
-        // trackable Process) — Steam/Xbox launches go through steam://, shell:appsFolder\..., and the
-        // launcher should still get out of the way for those exactly the same as a direct exe launch.
-        if (_launcherWindow is not null) _launcherWindow.WindowState = WindowState.Minimized;
+        // Hide (not minimize) rather than destroy on launch — cheaper than recreating the window later
+        // (no recreate-flicker for the common case), and unlike Minimize it drops the taskbar entry
+        // entirely, so the running game doesn't have to compete with a "Cartridge OS" button for
+        // alt-tab/taskbar space — the tray icon (always present, see App.OnStartup) is the only trace
+        // left, same as Steam/Discord's "close to tray" behavior. ShowLauncher() (tray icon click, the
+        // overlay's Return button, or the game exiting) un-hides it with a plain Show(). The launcher can
+        // still be fully closed (X button) while a game runs; that's handled by OnLauncherClosed same as
+        // any other close, independent of this. Unconditional (not just for a trackable Process) —
+        // Steam/Xbox launches go through steam://, shell:appsFolder\..., and the launcher should still get
+        // out of the way for those exactly the same as a direct exe launch.
+        _launcherWindow?.Hide();
 
         // Steam/Xbox launches go through steam://, shell:appsFolder\... — the shell handles those
         // itself and Process.Start returns null, so there's no process to track or overlay for.

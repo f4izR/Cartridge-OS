@@ -511,8 +511,17 @@ public partial class MainWindow : Window
         Close();
     }
 
+    /// <summary>Confirm/Play's entry point from every input path (gamepad/keyboard Confirm, double-click,
+    /// the Play button) — while a game we launched is already running, this resumes its window instead of
+    /// starting a second copy of it (see TryResumeRunningGame's own comment for why a fresh LaunchGame call
+    /// here would be wrong: same exe path or not, the user almost never wants two instances). Only reachable
+    /// with the launcher visible at all while a game runs — normally it's minimized (App.LaunchGame) and
+    /// this codepath doesn't come up; showing it back up (tray icon, overlay's Return button) is exactly the
+    /// case this exists for.</summary>
     internal static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
     {
+        if (vm.IsGameRunning) { ((App)Application.Current).TryResumeRunningGame(); return; }
+
         if (game is null) return;
         ((App)Application.Current).LaunchGame(vm, game);
     }
