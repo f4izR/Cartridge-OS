@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using CartridgeOS.Launcher.Services;
 using CartridgeOS.Launcher.ViewModels;
 
 namespace CartridgeOS.Launcher.Views;
@@ -32,7 +33,9 @@ public partial class HomeView : UserControl
         if (((FrameworkElement)sender).DataContext is not HomeCarouselSlot slot) return;
 
         var vm = (MainViewModel)DataContext;
+        if (!ReferenceEquals(vm.SelectedGame, slot.Game)) SoundService.PlayNavigate();
         vm.SelectedGame = slot.Game;
+        vm.ResetHomeCarouselTimer();
         if (e.ClickCount == 2) MainWindow.LaunchSelected(vm, slot.Game);
     }
 

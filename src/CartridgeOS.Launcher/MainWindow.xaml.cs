@@ -110,8 +110,8 @@ public partial class MainWindow : Window
 
             GamepadAction? action = e.Key switch
             {
-                Key.Left => GamepadAction.NavigateLeft,
-                Key.Right => GamepadAction.NavigateRight,
+                Key.Left or Key.A => GamepadAction.NavigateLeft,
+                Key.Right or Key.D => GamepadAction.NavigateRight,
                 Key.Up => GamepadAction.NavigateUp,
                 Key.Down => GamepadAction.NavigateDown,
                 Key.Enter or Key.Space => GamepadAction.Confirm,
@@ -265,6 +265,7 @@ public partial class MainWindow : Window
 
             if (newIndex != index) SoundService.PlayNavigate();
             vm.SelectedGame = visibleGames[newIndex];
+            vm.ResetHomeCarouselTimer();
         }
 
         if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);
@@ -471,7 +472,13 @@ public partial class MainWindow : Window
     public void UpdateCursorLocked(bool locked) => ((MainViewModel)DataContext).IsCursorLocked = locked;
 
     /// <summary>Forwarded by App from GamepadWatcher.ControllerChanged, and pushed once with the current value right after this window is created — drives the corner tab-switch glyphs and the bottom hint bar (see MainViewModel.ControllerKind).</summary>
-    public void UpdateControllerKind(ControllerKind? kind) => ((MainViewModel)DataContext).ControllerKind = kind ?? ControllerKind.Generic;
+    public void UpdateControllerKind(ControllerKind? kind) => ((MainViewModel)DataContext).ControllerKind = kind ?? ControllerKind.Keyboard;
+
+    /// <summary>Forwarded by App whenever a directly-launched game starts/exits — drives the header's
+    /// "Resume Game" pill (see MainViewModel.IsGameRunning).</summary>
+    public void UpdateRunningGame(string? title) => ((MainViewModel)DataContext).RunningGameTitle = title;
+
+    private void ResumeGame_Click(object sender, MouseButtonEventArgs e) => ((App)Application.Current).TryResumeRunningGame();
 
     public void ShowUpdateAvailable(string version, string releaseUrl) => ((MainViewModel)DataContext).ShowUpdateAvailable(version, releaseUrl);
 

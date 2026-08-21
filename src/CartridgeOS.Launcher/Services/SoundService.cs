@@ -19,16 +19,16 @@ public static class SoundService
     private static readonly Lazy<SoundPlayer> ConfirmSound = new(() => Load("confirm.wav"));
     private static readonly Lazy<SoundPlayer> TabSound = new(() => Load("tab.wav"));
 
-    /// <summary>Settings-driven mutes (MainViewModel.NavigationSoundEnabled/ConfirmSoundEnabled) — plain
-    /// static flags since every call site here is a static method with no viewmodel in reach. Tab-switch
-    /// reuses the same NavigationSoundEnabled flag as regular nav — it's the same "moving around the UI"
-    /// category, not worth its own separate Settings toggle.</summary>
+    /// <summary>Settings-driven mutes (MainViewModel.NavigationSoundEnabled/ConfirmSoundEnabled/
+    /// TabSwitchSoundEnabled) — plain static flags since every call site here is a static method with no
+    /// viewmodel in reach.</summary>
     public static bool NavigateEnabled { get; set; } = true;
     public static bool ConfirmEnabled { get; set; } = true;
+    public static bool TabSwitchEnabled { get; set; } = true;
 
     public static void PlayNavigate() => Play(NavigateSound, NavigateEnabled);
     public static void PlayConfirm() => Play(ConfirmSound, ConfirmEnabled);
-    public static void PlayTabSwitch() => Play(TabSound, NavigateEnabled);
+    public static void PlayTabSwitch() => Play(TabSound, TabSwitchEnabled);
 
     private static SoundPlayer Load(string fileName)
     {

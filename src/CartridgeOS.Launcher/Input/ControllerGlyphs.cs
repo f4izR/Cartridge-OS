@@ -25,6 +25,17 @@ public static class ControllerGlyphs
         (ControllerKind.PlayStation, GamepadAction.PreviousTab) => "L1",
         (ControllerKind.PlayStation, GamepadAction.NextTab) => "R1",
 
+        // No controller connected — label the actual keyboard key (MainWindow.xaml.cs's PreviewKeyDown
+        // switch is the source of truth these must match; see keybinds.md's "Keyboard equivalents" table).
+        // PreviousTab/NextTab/ToggleSearch have no keyboard shortcut at all (deliberate — see keybinds.md);
+        // their badges are hidden via MainViewModel.IsControllerConnected instead of shown with a fake label.
+        (ControllerKind.Keyboard, GamepadAction.Confirm) => "Enter",
+        (ControllerKind.Keyboard, GamepadAction.Back) => "Esc",
+        (ControllerKind.Keyboard, GamepadAction.Secondary) => "Insert",
+        (ControllerKind.Keyboard, GamepadAction.Menu) => "Menu",
+        (ControllerKind.Keyboard, GamepadAction.ToggleSettings) => "Tab",
+        (ControllerKind.Keyboard, GamepadAction.Power) => "F4",
+
         (_, GamepadAction.Confirm) => "1",
         (_, GamepadAction.Back) => "2",
         (_, GamepadAction.Secondary) => "4",

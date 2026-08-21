@@ -351,7 +351,9 @@
                         <StackPanel Orientation="Horizontal">
                             <Button Style="{StaticResource PlayCircleButtonStyle}" Content="&#xE768;"
                                     Click="ContinuePlaying_Click" Margin="0,0,14,0" />
-                            <TextBlock Text="Press A to Play" Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Foreground="White" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
+                                <Run Text="Press " /><Run Text="{Binding ConfirmLabel, Mode=OneWay}" FontWeight="Bold" /><Run Text=" to Play" />
+                            </TextBlock>
                         </StackPanel>
                     </StackPanel>
                 </Grid>

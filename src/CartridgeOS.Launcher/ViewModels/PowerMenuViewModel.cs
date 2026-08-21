@@ -26,8 +26,8 @@ public sealed class PowerMenuViewModel : ViewModelBase
         ExitToDesktopCommand = new RelayCommand(onExitToDesktop);
         ShutDownCartridgeOsCommand = new RelayCommand(onShutDownCartridgeOs);
 
-        ConfirmLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Generic, GamepadAction.Confirm);
-        BackLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Generic, GamepadAction.Back);
+        ConfirmLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Keyboard, GamepadAction.Confirm);
+        BackLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Keyboard, GamepadAction.Back);
     }
 
     // ponytail: shutdown.exe ships with every Windows install — no ExitWindowsEx P/Invoke needed for a one-shot power action.

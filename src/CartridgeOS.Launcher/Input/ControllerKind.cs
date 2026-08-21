@@ -6,4 +6,7 @@ public enum ControllerKind
     Xbox,
     PlayStation,
     Generic,
+    /// <summary>No gamepad connected — on-screen prompts should show the keyboard equivalent instead of a
+    /// made-up controller glyph.</summary>
+    Keyboard,
 }

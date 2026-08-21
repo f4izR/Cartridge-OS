@@ -25,6 +25,6 @@ public sealed partial class OverlayViewModel : ViewModelBase
         GameTitle = gameTitle;
         ReturnCommand = new RelayCommand(onReturn);
         QuitGameCommand = new RelayCommand(onQuitGame);
-        _menuButtonLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Generic, GamepadAction.Power);
+        _menuButtonLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Keyboard, GamepadAction.Power);
     }
 }

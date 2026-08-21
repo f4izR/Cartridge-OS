@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -63,6 +64,7 @@ public partial class App : Application
     private OverlayWindow? _overlayWindow;
     private Process? _runningGameProcess;
     private string? _runningGameTitle;
+    private string? _runningGameExePath; // fallback lookup key for TryResumeRunningGame when _runningGameProcess's own handle is stale (see HandleGameProcessExitedAsync's stub-process comment)
 
     private DispatcherTimer? _idleTimer;
     private DateTime _lastGamepadActivityUtc = DateTime.UtcNow; // GetLastInputInfo (IdleDetector) never sees gamepad input, so this is tracked separately
@@ -326,7 +328,7 @@ public partial class App : Application
         Dispatcher.BeginInvoke(() =>
         {
             _currentController = kind;
-            if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Generic, GamepadAction.Power);
+            if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Keyboard, GamepadAction.Power);
             _launcherWindow?.UpdateControllerKind(kind);
         });
     }
@@ -346,6 +348,7 @@ public partial class App : Application
             _launcherWindow.UpdateControllerBattery(_gamepad?.ControllerBatteryPercent);
             _launcherWindow.UpdateCursorLocked(_cursorLocked);
             _launcherWindow.UpdateControllerKind(_currentController);
+            _launcherWindow.UpdateRunningGame(_runningGameTitle);
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
 
@@ -411,6 +414,54 @@ public partial class App : Application
     {
         CloseOverlay();
         ShowLauncher();
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+    private const int SwRestore = 9;
+
+    /// <summary>Brings the already-running game's own window back to the foreground and minimizes the
+    /// launcher out of its way — the switch-back half of "Return to Cartridge OS", which only ever went
+    /// the other direction (there was no way to get back to the game once the launcher was showing again,
+    /// short of alt-tabbing outside the app entirely). Returns false if there's nothing trackable to
+    /// resume (no game running, or it was a Steam/Xbox shell launch — see LaunchGame's null-Process
+    /// comment — for which no window can be located here).</summary>
+    internal bool TryResumeRunningGame()
+    {
+        if (_runningGameProcess is null) return false;
+
+        IntPtr handle = IntPtr.Zero;
+        try
+        {
+            _runningGameProcess.Refresh();
+            if (!_runningGameProcess.HasExited) handle = _runningGameProcess.MainWindowHandle;
+        }
+        catch (InvalidOperationException) { /* process object is stale — fall through to the exe-name lookup below */ }
+
+        // Same stub-then-real-process situation HandleGameProcessExitedAsync guards against: the tracked
+        // Process can be the short-lived launcher stub (already exited, or never had a window of its own)
+        // while the actual game runs under a different PID with the same exe name.
+        if (handle == IntPtr.Zero && !string.IsNullOrEmpty(_runningGameExePath))
+        {
+            string exeName = Path.GetFileNameWithoutExtension(_runningGameExePath);
+            foreach (var candidate in Process.GetProcessesByName(exeName))
+            {
+                try
+                {
+                    if (candidate.MainWindowHandle != IntPtr.Zero) { handle = candidate.MainWindowHandle; break; }
+                }
+                catch (InvalidOperationException) { }
+            }
+        }
+
+        if (handle == IntPtr.Zero) return false;
+
+        if (IsIconic(handle)) ShowWindow(handle, SwRestore);
+        SetForegroundWindow(handle);
+
+        if (_launcherWindow is not null) _launcherWindow.WindowState = WindowState.Minimized;
+        return true;
     }
 
     private void QuitRunningGame()
@@ -504,6 +555,8 @@ public partial class App : Application
 
         _runningGameProcess = process;
         _runningGameTitle = game.Title;
+        _runningGameExePath = game.ExecutablePath;
+        _launcherWindow?.UpdateRunningGame(_runningGameTitle);
         var startedAtUtc = DateTime.UtcNow;
 
         try
@@ -559,6 +612,8 @@ public partial class App : Application
     {
         _runningGameProcess = null;
         _runningGameTitle = null;
+        _runningGameExePath = null;
+        _launcherWindow?.UpdateRunningGame(null);
         CloseOverlay();
         _ = _discord?.SetIdleActivityAsync(); // back to "Browsing the library" rather than clearing to nothing
         ShowLauncher(); // Steam-like: bring the launcher back automatically once the game closes

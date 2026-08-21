@@ -47,6 +47,18 @@
     <SolidColorBrush x:Key="SelectedTileAccentBrush" Color="#51E7ED" Opacity="0.08" />
     <SolidColorBrush x:Key="FocusGlowBrush" Color="#51E7ED" Opacity="0.30" />
 
+    <!-- Text entry — shared by SettingsPanel and any other dialog that needs a themed TextBox (e.g.
+         RenameGameWindow), so it lives here rather than scoped to one UserControl's local resources. -->
+    <Style x:Key="SettingsTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
     <!-- Primary button -->
     <Style x:Key="PrimaryButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource BrandCyanBrush}" />

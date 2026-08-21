@@ -38,11 +38,17 @@ public sealed class MainViewModel : ViewModelBase
     private static readonly TimeSpan ConnectivityProbeInterval = TimeSpan.FromSeconds(5);
     private static readonly HttpClient ConnectivityHttpClient = new() { Timeout = TimeSpan.FromSeconds(3) };
 
+    // How long the Home carousel sits on one game before auto-advancing to the next — same wrap-around
+    // step NavigateRight uses (see MainWindow.HandleGamepadAction's Home block), just on a clock instead
+    // of a keypress.
+    private static readonly TimeSpan HomeCarouselAutoCycleInterval = TimeSpan.FromSeconds(8);
+
     private readonly GameDatabase _db;
     private readonly AppSettings _settings = SettingsStore.Load();
     private readonly DispatcherTimer _rescanTimer;
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _connectivityTimer;
+    private readonly DispatcherTimer _homeCarouselTimer;
     private readonly Dispatcher _dispatcher;
     private bool _isInternetReachable = true; // last real probe result — refined every ConnectivityProbeInterval, see ProbeConnectivityAsync
 
@@ -167,6 +173,19 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    public bool TabSwitchSoundEnabled
+    {
+        get => _settings.TabSwitchSoundEnabled;
+        set
+        {
+            if (_settings.TabSwitchSoundEnabled == value) return;
+            _settings.TabSwitchSoundEnabled = value;
+            SoundService.TabSwitchEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
     public bool ScreenSaverEnabled
     {
         get => _settings.ScreenSaverEnabled;
@@ -176,6 +195,19 @@ public sealed class MainViewModel : ViewModelBase
             _settings.ScreenSaverEnabled = value;
             OnPropertyChanged();
             SettingsStore.Save(_settings);
+        }
+    }
+
+    public bool HomeCarouselAutoCycleEnabled
+    {
+        get => _settings.HomeCarouselAutoCycleEnabled;
+        set
+        {
+            if (_settings.HomeCarouselAutoCycleEnabled == value) return;
+            _settings.HomeCarouselAutoCycleEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+            if (value) ResetHomeCarouselTimer(); else _homeCarouselTimer.Stop();
         }
     }
 
@@ -350,6 +382,7 @@ public sealed class MainViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedScreen, value)) return;
             OnPropertyChanged(nameof(IsHomeScreen));
+            OnPropertyChanged(nameof(IsSearchHintVisible));
             // Search is only visible on Library (see MainWindow.xaml's search pill) — clear it on leaving,
             // so it can't keep silently filtering Home's carousel / Recently Played's nav list (both walk
             // GamesView too) with no visible search box left to explain why.
@@ -434,17 +467,20 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool HasBatteryInfo => BatteryLabel is not null;
 
-    private ControllerKind _controllerKind = ControllerKind.Generic;
-    /// <summary>Set by App forwarding GamepadWatcher's ControllerChanged (defaults to Generic pre-connect/on
-    /// disconnect) — drives every *Label property below so the on-screen button prompts (corner tab-switch
-    /// glyphs, the bottom hint bar) always match whatever's actually plugged in, same source PowerMenuWindow/
-    /// OverlayWindow already use for their own prompts.</summary>
+    private ControllerKind _controllerKind = ControllerKind.Keyboard;
+    /// <summary>Set by App forwarding GamepadWatcher's ControllerChanged (defaults to Keyboard pre-connect/on
+    /// disconnect, since there's no gamepad plugged in to show a glyph for) — drives every *Label property
+    /// below so the on-screen button prompts (corner tab-switch glyphs, the bottom hint bar) always match
+    /// whatever's actually plugged in, same source PowerMenuWindow/OverlayWindow already use for their own
+    /// prompts.</summary>
     public ControllerKind ControllerKind
     {
         get => _controllerKind;
         set
         {
             if (!SetProperty(ref _controllerKind, value)) return;
+            OnPropertyChanged(nameof(IsControllerConnected));
+            OnPropertyChanged(nameof(IsSearchHintVisible));
             OnPropertyChanged(nameof(PreviousTabLabel));
             OnPropertyChanged(nameof(NextTabLabel));
             OnPropertyChanged(nameof(ConfirmLabel));
@@ -455,6 +491,32 @@ public sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(SearchLabel));
         }
     }
+
+    /// <summary>False while no gamepad is connected — hides prompts (LB/RB tab-cycle badges, Toggle Search)
+    /// that have no keyboard equivalent at all, rather than showing a glyph for a button that doesn't exist.</summary>
+    public bool IsControllerConnected => ControllerKind != ControllerKind.Keyboard;
+
+    /// <summary>Toggle Search's bottom-bar hint — only makes sense on Library (where search lives) AND with
+    /// a controller connected (there's no keyboard shortcut for it at all, see keybinds.md).</summary>
+    public bool IsSearchHintVisible => SelectedScreen == AppScreen.Library && IsControllerConnected;
+
+    private string? _runningGameTitle;
+    /// <summary>Set by App (App.TryResumeRunningGame/UpdateRunningGame) whenever a directly-launched game
+    /// starts/exits — null for Steam/Xbox shell launches too, same as everywhere else that tracks a running
+    /// game (App.LaunchGame's null-Process comment), since there's no window to resume for those anyway.</summary>
+    public string? RunningGameTitle
+    {
+        get => _runningGameTitle;
+        set
+        {
+            if (!SetProperty(ref _runningGameTitle, value)) return;
+            OnPropertyChanged(nameof(IsGameRunning));
+        }
+    }
+
+    /// <summary>Drives the header's "Resume Game" pill — lets the user switch back to an already-running
+    /// game's window from inside Cartridge OS instead of only being able to leave the game to get here.</summary>
+    public bool IsGameRunning => RunningGameTitle is not null;
 
     public string PreviousTabLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.PreviousTab);
     public string NextTabLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.NextTab);
@@ -672,6 +734,7 @@ public sealed class MainViewModel : ViewModelBase
         _dispatcher = Dispatcher.CurrentDispatcher;
         SoundService.NavigateEnabled = _settings.NavigationSoundEnabled;
         SoundService.ConfirmEnabled = _settings.ConfirmSoundEnabled;
+        SoundService.TabSwitchEnabled = _settings.TabSwitchSoundEnabled;
 
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -765,6 +828,10 @@ public sealed class MainViewModel : ViewModelBase
         _statusTimer.Start();
         UpdateClock();
         RefreshStorageStats();
+
+        _homeCarouselTimer = new DispatcherTimer { Interval = HomeCarouselAutoCycleInterval };
+        _homeCarouselTimer.Tick += (_, _) => AdvanceHomeCarousel();
+        if (HomeCarouselAutoCycleEnabled) _homeCarouselTimer.Start();
     }
 
     public void StopBackgroundRescanning() => _rescanTimer.Stop();
@@ -774,7 +841,33 @@ public sealed class MainViewModel : ViewModelBase
     {
         _statusTimer.Stop();
         _connectivityTimer.Stop();
+        _homeCarouselTimer.Stop();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+    }
+
+    /// <summary>Steps the Home carousel one game to the right, same wrap-around math as the manual
+    /// mouse/keyboard/gamepad NavigateRight handling in MainWindow — a no-op off the Home screen or with
+    /// fewer than two games (nothing to cycle between).</summary>
+    private void AdvanceHomeCarousel()
+    {
+        if (SelectedScreen != AppScreen.Home) return;
+
+        var games = GamesView.Cast<GameTileViewModel>().ToList();
+        if (games.Count < 2) return;
+
+        int index = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
+        if (index < 0) index = 0;
+
+        SelectedGame = games[(index + 1) % games.Count];
+    }
+
+    /// <summary>Restarts the auto-cycle countdown from zero — called whenever the Home carousel's selection
+    /// changes for a reason other than the timer itself (mouse click, keyboard/gamepad nav), so a manual
+    /// nudge doesn't get immediately undone by an auto-advance a moment later.</summary>
+    public void ResetHomeCarouselTimer()
+    {
+        _homeCarouselTimer.Stop();
+        if (HomeCarouselAutoCycleEnabled) _homeCarouselTimer.Start();
     }
 
     private bool FilterGame(object obj) =>

@@ -11,6 +11,10 @@ public sealed class AppSettings
     public WallpaperMode WallpaperMode { get; set; } = WallpaperMode.SelectedGameArtwork;
     public string? CustomWallpaperPath { get; set; }
 
+    /// <summary>Whether the Home carousel auto-advances on its own timer (MainViewModel.AdvanceHomeCarousel)
+    /// or only moves in response to the user's own input.</summary>
+    public bool HomeCarouselAutoCycleEnabled { get; set; } = true;
+
     /// <summary>Most-recently-used "Find More Games" scan directories, most-recent-first, capped at
     /// MainViewModel.MaxScanDirectories. Empty means "no directory chosen yet — use the default sweep".</summary>
     public List<string> ScanDirectories { get; set; } = [];
@@ -21,6 +25,7 @@ public sealed class AppSettings
 
     public bool NavigationSoundEnabled { get; set; } = true;
     public bool ConfirmSoundEnabled { get; set; } = true;
+    public bool TabSwitchSoundEnabled { get; set; } = true;
 
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverInactivityMinutes { get; set; } = 1;
