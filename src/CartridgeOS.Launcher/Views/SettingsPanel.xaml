@@ -102,7 +102,11 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <!-- Focusable="False": these are inline signup links, not real Settings controls — letting D-Pad
+             MoveFocus land keyboard focus on a Hyperlink crashed IsDescendantOf's VisualTreeHelper walk
+             (Hyperlink is a TextElement, not a Visual, so GetParent throws InvalidOperationException on it). -->
         <Style TargetType="Hyperlink">
+            <Setter Property="Focusable" Value="False" />
             <Setter Property="Foreground" Value="{StaticResource BrandCyanBrush}" />
             <Setter Property="TextDecorations" Value="Underline" />
             <Style.Triggers>
@@ -113,12 +117,58 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
+    <!-- Collapsible settings sidebar. Slides in/out from the right edge and cross-fades, via a DataTrigger
+         storyboard rather than the direct Visibility binding this used to have — Visibility itself is
+         animated with a delayed keyframe on close so the slide-out is visible before the panel collapses
+         (an instant Visibility flip gives WPF no frame to animate away from). -->
     <Border x:Name="RootBorder" Width="460" Padding="24"
             Background="{StaticResource SurfaceRaisedBrush}"
             BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}"
-            Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}"
+            Visibility="Collapsed" Opacity="0"
             IsVisibleChanged="RootBorder_IsVisibleChanged">
+        <Border.RenderTransform>
+            <TranslateTransform X="460" />
+        </Border.RenderTransform>
+        <Border.Style>
+            <Style TargetType="Border">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
+                        <DataTrigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Visibility" Duration="0">
+                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{x:Static Visibility.Visible}" />
+                                    </ObjectAnimationUsingKeyFrames>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                     To="0" Duration="0:0:0.25">
+                                        <DoubleAnimation.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut" />
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.EnterActions>
+                        <DataTrigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                     To="460" Duration="0:0:0.2">
+                                        <DoubleAnimation.EasingFunction>
+                                            <CubicEase EasingMode="EaseIn" />
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" />
+                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Visibility">
+                                        <DiscreteObjectKeyFrame KeyTime="0:0:0.2" Value="{x:Static Visibility.Collapsed}" />
+                                    </ObjectAnimationUsingKeyFrames>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.ExitActions>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
         <DockPanel>
             <TextBlock DockPanel.Dock="Top" Text="Settings" Foreground="{StaticResource TextPrimaryBrush}"
                        FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />

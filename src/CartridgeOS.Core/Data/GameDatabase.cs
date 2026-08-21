@@ -118,6 +118,16 @@ public sealed class GameDatabase
         command.ExecuteNonQuery();
     }
 
+    public void UpdateTitle(int id, string title)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE Games SET Title = $title WHERE Id = $id;";
+        command.Parameters.AddWithValue("$title", title);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
     public void UpdateArtworkPath(int id, string? artworkPath)
     {
         using var connection = OpenConnection();

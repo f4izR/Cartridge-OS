@@ -16,6 +16,65 @@
         Background="{StaticResource BackgroundBrush}">
 
     <Window.Resources>
+        <!-- Small rounded badge for an on-screen controller-button prompt (LB/RB corner tab-switch glyphs,
+             the bottom hint bar) — one shared visual so every prompt in the window looks the same regardless
+             of which action/controller it's currently showing. -->
+        <Style x:Key="ControllerGlyphBadgeStyle" TargetType="Border">
+            <Setter Property="MinWidth" Value="26" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="ControllerGlyphTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- One key on the on-screen keyboard (SearchKeyboardHost below) — there's no physical-keyboard
+             requirement anywhere else in this app, but Search had no gamepad-only way to fill it in at all
+             (X/Square just opened an empty text box). D-Pad reaches these the same way it reaches every other
+             Settings/Search control — plain WPF focus traversal (MainWindow.MoveFocusFrom) — and Confirm
+             activates whichever key is focused via its Command (MainWindow.ConfirmFocused's ButtonBase case),
+             no bespoke input handling needed for either. -->
+        <Style x:Key="OnScreenKeyStyle" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="KeyBg" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="KeyBg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <Setter TargetName="KeyBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="KeyBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Crossfade between screens instead of the instant Visibility cut it used to be. All three
              stay technically "Visible" (Opacity 0 + IsHitTestVisible False when not current) rather than
              Collapsed, since Collapsed can't be animated — the tradeoff is the off-screen ones keep their
@@ -159,35 +218,47 @@
 
                 <!-- Home / Recently Played / Library — true top-center regardless of the logo's/status area's
                      width, since it spans the whole header row and centers within that full span rather than
-                     living inside either side column. -->
-                <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center"
-                        CornerRadius="22" Padding="4"
-                        Background="{StaticResource SurfaceRaisedBrush}"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                    <StackPanel Orientation="Horizontal">
-                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
-                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Home}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <TextBlock Text="Home" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
-                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=RecentlyPlayed}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <TextBlock Text="Recently Played" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
-                                     IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Library}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <TextBlock Text="Library" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                    </StackPanel>
-                </Border>
+                     living inside either side column. LB/RB (L1/R1) glyph badges flank the tab pill itself —
+                     the corner-of-the-tab-switcher convention most console dashboards use to show which
+                     shoulder button cycles tabs, updated live to match whatever controller's connected
+                     (see MainViewModel.ControllerKind / PreviousTabLabel / NextTabLabel). -->
+                <StackPanel Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center" Orientation="Horizontal">
+                    <Border Style="{StaticResource ControllerGlyphBadgeStyle}" Margin="0,0,10,0">
+                        <TextBlock Text="{Binding PreviousTabLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                    </Border>
+
+                    <Border CornerRadius="22" Padding="4"
+                            Background="{StaticResource SurfaceRaisedBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                         IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Home}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="Home" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                         IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=RecentlyPlayed}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="Recently Played" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton GroupName="AppScreen" Style="{StaticResource NavTabStyle}"
+                                         IsChecked="{Binding SelectedScreen, Converter={StaticResource EnumToBoolean}, ConverterParameter=Library}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="Library" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ControllerGlyphBadgeStyle}" Margin="10,0,0,0">
+                        <TextBlock Text="{Binding NextTabLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                    </Border>
+                </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <!-- LT+RT toggle (App.OnGamepadAction) — replaces an earlier always-on-top floating badge,
@@ -240,7 +311,7 @@
                             <Button Content="&#xE721;" FontFamily="Segoe MDL2 Assets" Width="28" Height="28"
                                     Command="{Binding ToggleSearchCommand}"
                                     Style="{StaticResource WindowControlButtonBase}" ToolTip="Search" />
-                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                      Width="140" Margin="4,0,4,0" VerticalAlignment="Center" VerticalContentAlignment="Center"
                                      Background="Transparent" BorderThickness="0"
                                      Foreground="{StaticResource TextPrimaryBrush}" CaretBrush="{StaticResource TextPrimaryBrush}"
@@ -274,10 +345,123 @@
                 <views:RecentlyPlayedView Style="{StaticResource RecentlyPlayedScreenFadeStyle}" />
 
                 <views:LibraryView x:Name="LibraryScreen" Style="{StaticResource LibraryScreenFadeStyle}" />
+
+                <!-- On-screen keyboard for the Library search box — the only text field in this app with no
+                     other way to fill it in from a gamepad. Shown for mouse/keyboard users too rather than
+                     trying to detect "is a controller currently driving this" (Steam Big Picture does the
+                     same — a physical-keyboard user can just ignore it and type normally). Sits in the normal
+                     visual tree, not a Popup — a Popup's content is its own visual root and isn't reachable by
+                     MainWindow's IsDescendantOf/MoveFocus D-Pad routing (see the ComboBox-dropdown fix in
+                     ConfirmFocused for the same issue). -->
+                <Border x:Name="SearchKeyboardHost" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,0,24,0" CornerRadius="10" Padding="10"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        Visibility="{Binding IsSearchOpen, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <UniformGrid Columns="10">
+                            <Button Content="Q" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="Q" />
+                            <Button Content="W" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="W" />
+                            <Button Content="E" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="E" />
+                            <Button Content="R" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="R" />
+                            <Button Content="T" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="T" />
+                            <Button Content="Y" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="Y" />
+                            <Button Content="U" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="U" />
+                            <Button Content="I" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="I" />
+                            <Button Content="O" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="O" />
+                            <Button Content="P" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="P" />
+                        </UniformGrid>
+                        <UniformGrid Columns="10" Margin="15,0,0,0">
+                            <Button Content="A" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="A" />
+                            <Button Content="S" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="S" />
+                            <Button Content="D" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="D" />
+                            <Button Content="F" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="F" />
+                            <Button Content="G" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="G" />
+                            <Button Content="H" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="H" />
+                            <Button Content="J" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="J" />
+                            <Button Content="K" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="K" />
+                            <Button Content="L" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="L" />
+                        </UniformGrid>
+                        <UniformGrid Columns="10" Margin="45,0,0,0">
+                            <Button Content="Z" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="Z" />
+                            <Button Content="X" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="X" />
+                            <Button Content="C" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="C" />
+                            <Button Content="V" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="V" />
+                            <Button Content="B" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="B" />
+                            <Button Content="N" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="N" />
+                            <Button Content="M" Style="{StaticResource OnScreenKeyStyle}" Command="{Binding AppendSearchCharCommand}" CommandParameter="M" />
+                        </UniformGrid>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <Button Content="Space" Width="140" Height="30" Margin="2" FontSize="13"
+                                    Style="{StaticResource OnScreenKeyStyle}"
+                                    Command="{Binding AppendSearchCharCommand}" CommandParameter=" " />
+                            <Button Content="⌫" Width="60" Height="30" Margin="2" FontSize="13"
+                                    Style="{StaticResource OnScreenKeyStyle}"
+                                    Command="{Binding BackspaceSearchCommand}" />
+                            <Button Content="Done" Width="70" Height="30" Margin="2" FontSize="13"
+                                    Style="{StaticResource OnScreenKeyStyle}"
+                                    Command="{Binding ToggleSearchCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Bottom button-prompt bar — the "what does this button do" legend most console dashboards
+                     and games dock bottom-center, glyphs swapped live to match the connected controller (see
+                     MainViewModel.ControllerKind and its *Label properties). IsHitTestVisible="False" so it
+                     never steals a click meant for whatever tile is underneath it. -->
+                <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,14"
+                        CornerRadius="18" Padding="14,8"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        IsHitTestVisible="False" Opacity="0.9">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}">
+                            <TextBlock Text="{Binding ConfirmLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Select" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,16,0" />
+
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}">
+                            <TextBlock Text="{Binding BackLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Back" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,16,0" />
+
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}"
+                                Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}">
+                            <TextBlock Text="{Binding SecondaryLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Add Game" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,16,0"
+                                   Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}" />
+
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}"
+                                Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}">
+                            <TextBlock Text="{Binding MenuLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Options" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,16,0"
+                                   Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}" />
+
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}"
+                                Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}">
+                            <TextBlock Text="{Binding SearchLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Search" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,16,0"
+                                   Visibility="{Binding SelectedScreen, Converter={StaticResource EnumToVisibility}, ConverterParameter=Library}" />
+
+                        <Border Style="{StaticResource ControllerGlyphBadgeStyle}">
+                            <TextBlock Text="{Binding SettingsLabel}" Style="{StaticResource ControllerGlyphTextStyle}" />
+                        </Border>
+                        <TextBlock Text="Settings" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="6,0,0,0" />
+                    </StackPanel>
+                </Border>
             </Grid>
         </Grid>
 
-        <!-- Collapsible settings sidebar. Just a Visibility toggle, no slide animation — add one if the hard show/hide feels too abrupt. -->
+        <!-- Collapsible settings sidebar — slide/fade animation lives in SettingsPanel.xaml itself. -->
         <views:SettingsPanel x:Name="SettingsHost" Grid.Column="1" />
 
         <!-- Error toast — top-center, above everything else (last in z-order). The fullscreen kiosk shell

@@ -28,6 +28,12 @@ public sealed partial class GameTileViewModel : ViewModelBase
     public string Title => _game.Title;
     public string ExecutablePath => _game.ExecutablePath;
 
+    public void SetTitle(string title)
+    {
+        _game.Title = title;
+        OnPropertyChanged(nameof(Title));
+    }
+
     /// <summary>Portrait boxart path — consumed directly (not via the decoded Artwork bitmap) by MainViewModel
     /// when it needs its own higher-resolution decode, e.g. for the Home background.</summary>
     public string? ArtworkPath => _game.ArtworkPath;

@@ -24,7 +24,7 @@ button. Don't confuse the two when reading `GamepadWatcher.ActionMap`.
 | B | B | ○ Circle | Back | Closes whatever's open on top (Settings, then Search) — never navigates screens | Universal console convention — right face button always backs out/cancels |
 | Y | Y | △ Triangle | Secondary | Add Game (opens the file picker) | Xbox dashboard uses Y for a screen's main secondary action |
 | X | X | □ Square | Toggle Search | Opens/closes the Library search box — no-ops outside Library | Common "search/filter" slot on the left face button in dashboard-style UIs |
-| Menu (☰, was "Start") | Menu | Options | Menu | Opens the selected tile's context menu (Change Wallpaper / Delete Game) | Real Xbox Home: selecting a game and pressing Menu shows its options (Manage game, Uninstall, Pin). PS5: Options does the same job on a selected item. This is "the button that opens a game's options," matching what a user coming from either console expects. |
+| Menu (☰, was "Start") | Menu | Options | Menu | Opens the selected tile's context menu (Rename Game / Change Wallpaper / Revert to Previous Artwork / Delete Game) | Real Xbox Home: selecting a game and pressing Menu shows its options (Manage game, Uninstall, Pin). PS5: Options does the same job on a selected item. This is "the button that opens a game's options," matching what a user coming from either console expects. |
 | View / Share | View | Share | Toggle Settings | Opens/closes the Settings sidebar | Xbox dashboard's View button is the standard "more options" button; PS5's equivalent is Share/Create in some apps |
 | Left Shoulder (LB/L1) | LB | L1 | Previous Tab | Home → Recently Played → Library, cycling backward | Universal — shoulder buttons page between tabs in nearly every console UI (Xbox dashboard, PS5 settings, Steam Big Picture) |
 | Right Shoulder (RB/R1) | RB | R1 | Next Tab | Cycles forward through the three screens | Same as above |
@@ -98,6 +98,13 @@ physical hardware (see `context.md`'s "no real UI automation here" limitation).
 
 **Deliberately no keyboard shortcut for Toggle Search** — the search box is opened by clicking its
 icon (mouse) or the X/Square button (gamepad) only.
+
+**2026-08-21: on-screen keyboard added for Search** — X/Square opened an empty text box with no
+gamepad-only way to actually type into it. `MainWindow.xaml`'s `SearchKeyboardHost` now shows a
+QWERTY grid (D-Pad to move between keys, A/✕ to type the focused one, same `ConfirmFocused`/
+`MoveFocusFrom` plumbing every other Settings/Search control already uses) whenever Search is open,
+for every input method — not just detected-gamepad sessions, same call Steam Big Picture makes; a
+physical-keyboard user can just ignore it and type normally.
 
 **2026-08-18**: the focus-aware guard mentioned above now exists — `MainWindow`'s `PreviewKeyDown`
 skips entirely when `Keyboard.FocusedElement is TextBox`, so arrow keys/Enter/Escape reach a focused

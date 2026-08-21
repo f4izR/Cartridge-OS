@@ -16,6 +16,7 @@ using CartridgeOS.Core;
 using CartridgeOS.Core.Data;
 using CartridgeOS.Core.Models;
 using CartridgeOS.Core.Scanning;
+using CartridgeOS.Launcher.Input;
 using CartridgeOS.Launcher.Services;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -386,6 +387,20 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Appends one character from the on-screen keyboard (see MainWindow.xaml's SearchKeyboardHost) —
+    /// there's no physical-keyboard requirement in this app anywhere else, but Search was the one text field
+    /// with no gamepad-only way to fill it in at all. CommandParameter carries the character as a string
+    /// since XAML CommandParameter has no single-char type.</summary>
+    private void AppendSearchChar(string? ch)
+    {
+        if (!string.IsNullOrEmpty(ch)) SearchText += ch;
+    }
+
+    private void BackspaceSearchChar()
+    {
+        if (SearchText.Length > 0) SearchText = SearchText[..^1];
+    }
+
     private int? _controllerBatteryPercent;
     /// <summary>Set by App forwarding GamepadWatcher's ControllerBatteryChanged — null when no controller reports one.</summary>
     public int? ControllerBatteryPercent
@@ -418,6 +433,37 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     public bool HasBatteryInfo => BatteryLabel is not null;
+
+    private ControllerKind _controllerKind = ControllerKind.Generic;
+    /// <summary>Set by App forwarding GamepadWatcher's ControllerChanged (defaults to Generic pre-connect/on
+    /// disconnect) — drives every *Label property below so the on-screen button prompts (corner tab-switch
+    /// glyphs, the bottom hint bar) always match whatever's actually plugged in, same source PowerMenuWindow/
+    /// OverlayWindow already use for their own prompts.</summary>
+    public ControllerKind ControllerKind
+    {
+        get => _controllerKind;
+        set
+        {
+            if (!SetProperty(ref _controllerKind, value)) return;
+            OnPropertyChanged(nameof(PreviousTabLabel));
+            OnPropertyChanged(nameof(NextTabLabel));
+            OnPropertyChanged(nameof(ConfirmLabel));
+            OnPropertyChanged(nameof(BackLabel));
+            OnPropertyChanged(nameof(SecondaryLabel));
+            OnPropertyChanged(nameof(MenuLabel));
+            OnPropertyChanged(nameof(SettingsLabel));
+            OnPropertyChanged(nameof(SearchLabel));
+        }
+    }
+
+    public string PreviousTabLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.PreviousTab);
+    public string NextTabLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.NextTab);
+    public string ConfirmLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.Confirm);
+    public string BackLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.Back);
+    public string SecondaryLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.Secondary);
+    public string MenuLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.Menu);
+    public string SettingsLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.ToggleSettings);
+    public string SearchLabel => ControllerGlyphs.Label(ControllerKind, GamepadAction.ToggleSearch);
 
     private bool _isOnline = true;
     public bool IsOnline
@@ -477,8 +523,8 @@ public sealed class MainViewModel : ViewModelBase
     // Same story as the Library tile sizes above — HomeView's carousel (HomeView.xaml.cs's ApplyOffset)
     // reads all its pixel dimensions from here instead of owning its own constants, so both screens scale
     // off one shared source of truth.
-    public const double BaseHomeCenterWidth = 260, BaseHomeCenterHeight = 430;
-    public const double BaseHomeSideWidth = 190, BaseHomeSideHeight = 320;
+    public const double BaseHomeCenterWidth = 260, BaseHomeCenterHeight = 410;
+    public const double BaseHomeSideWidth = 190, BaseHomeSideHeight = 300;
     public const double BaseHomeSlotPitch = 250;
 
     public double HomeCenterWidth => Math.Round(BaseHomeCenterWidth * UiScale);
@@ -577,11 +623,14 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand RemoveGameCommand { get; }
     public ICommand ChangeArtworkCommand { get; }
     public ICommand RevertArtworkCommand { get; }
+    public ICommand RenameGameCommand { get; }
     public ICommand ScanForGamesCommand { get; }
     public ICommand FindMoreGamesCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
     public ICommand ChooseWallpaperCommand { get; }
     public ICommand ToggleSearchCommand { get; }
+    public ICommand AppendSearchCharCommand { get; }
+    public ICommand BackspaceSearchCommand { get; }
     public ICommand BrowseScanDirectoryCommand { get; }
     public ICommand BrowseScreenSaverImagesCommand { get; }
     public ICommand ClearScreenSaverImagesCommand { get; }
@@ -634,6 +683,7 @@ public sealed class MainViewModel : ViewModelBase
         RemoveGameCommand = new RelayCommand(RemoveGame);
         ChangeArtworkCommand = new RelayCommand(ChangeArtwork);
         RevertArtworkCommand = new RelayCommand(RevertArtwork);
+        RenameGameCommand = new RelayCommand(RenameGame);
         DismissErrorCommand = new RelayCommand(() => HasErrorMessage = false);
         OpenUpdateCommand = new RelayCommand(() =>
         {
@@ -646,6 +696,8 @@ public sealed class MainViewModel : ViewModelBase
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
         ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
+        AppendSearchCharCommand = new RelayCommand<string>(AppendSearchChar);
+        BackspaceSearchCommand = new RelayCommand(BackspaceSearchChar);
         BrowseScanDirectoryCommand = new RelayCommand(BrowseScanDirectory);
         BrowseScreenSaverImagesCommand = new RelayCommand(() => ScreenSaverImagesFolder = BrowseForFolder("Select a folder of images for the screen saver") ?? ScreenSaverImagesFolder);
         ClearScreenSaverImagesCommand = new RelayCommand(() => ScreenSaverImagesFolder = null);
@@ -978,6 +1030,24 @@ public sealed class MainViewModel : ViewModelBase
 
         try { _db.UpdateArtworkPath(game.Id, restored); }
         catch (System.Data.Common.DbException ex) { ShowError($"Couldn't revert artwork for \"{game.Title}\" — {ex.Message}"); }
+    }
+
+    /// <summary>Renames the selected game — artwork is untouched, only the title changes.</summary>
+    private void RenameGame()
+    {
+        var game = SelectedGame;
+        if (game is null) return;
+
+        var dialog = new RenameGameWindow(game.Title) { Owner = Application.Current.MainWindow };
+        if (dialog.ShowDialog() != true) return;
+
+        string newTitle = dialog.NewTitle;
+        if (string.IsNullOrEmpty(newTitle) || newTitle == game.Title) return;
+
+        try { _db.UpdateTitle(game.Id, newTitle); }
+        catch (System.Data.Common.DbException ex) { ShowError($"Couldn't rename game — {ex.Message}"); return; }
+
+        game.SetTitle(newTitle);
     }
 
     private async Task ChooseWallpaperAsync()

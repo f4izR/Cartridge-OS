@@ -22,11 +22,13 @@
             <Button Content="Restart System" Command="{Binding RestartSystemCommand}"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+                    Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Visibility="Collapsed" />
             <Button Content="Turn Off System" Command="{Binding TurnOffSystemCommand}"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    Padding="10,8" HorizontalAlignment="Stretch" />
+                    Padding="10,8" HorizontalAlignment="Stretch"
+                    Visibility="Collapsed" />
 
             <TextBlock Foreground="{StaticResource TextMutedBrush}"
                        FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center" TextWrapping="Wrap">

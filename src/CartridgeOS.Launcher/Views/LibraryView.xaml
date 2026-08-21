@@ -12,6 +12,7 @@
              read this control's own DataContext directly, sidestepping ContextMenu's usual data-context/
              visual-tree quirks entirely rather than fighting them with RelativeSource bindings. -->
         <ContextMenu x:Key="GameTileContextMenu" Opened="GameTileContextMenu_Opened">
+            <MenuItem Header="Rename Game" Click="RenameGame_Click" />
             <MenuItem Header="Change Wallpaper" Click="ChangeWallpaper_Click" />
             <MenuItem Tag="RevertArtwork" Header="Revert to Previous Artwork" Click="RevertArtwork_Click" />
             <MenuItem Header="Delete Game" Click="DeleteGame_Click" />
@@ -188,7 +189,7 @@
                  VirtualizingPanel.IsVirtualizing="True"
                  VirtualizingPanel.VirtualizationMode="Recycling"
                  ItemContainerStyle="{StaticResource GameTileStyle}"
-                 Margin="24,0,24,24" MouseDoubleClick="GameGridListBox_MouseDoubleClick">
+                 Margin="24,0,24,76" MouseDoubleClick="GameGridListBox_MouseDoubleClick">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
                     <vwp:VirtualizingWrapPanel Orientation="Horizontal" />

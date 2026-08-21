@@ -327,6 +327,7 @@ public partial class App : Application
         {
             _currentController = kind;
             if (_overlayWindow?.DataContext is OverlayViewModel vm) vm.MenuButtonLabel = ControllerGlyphs.Label(kind ?? ControllerKind.Generic, GamepadAction.Power);
+            _launcherWindow?.UpdateControllerKind(kind);
         });
     }
 
@@ -344,6 +345,7 @@ public partial class App : Application
             _launcherWindow = new MainWindow(_lastSelectedGameId);
             _launcherWindow.UpdateControllerBattery(_gamepad?.ControllerBatteryPercent);
             _launcherWindow.UpdateCursorLocked(_cursorLocked);
+            _launcherWindow.UpdateControllerKind(_currentController);
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
 

@@ -136,7 +136,9 @@
     <!-- Home: the selected game's own art fills the whole screen behind this (see MainWindow's background
          layer — Home is the only screen where selection drives the backdrop). Details + carousel anchored
          to the bottom, per request, rather than the top like the reference image. -->
-    <Grid Margin="40,0,40,32" VerticalAlignment="Bottom">
+    <!-- Bottom margin cleared to sit above MainWindow's bottom controller-hint bar (~66px tall including
+         its own margin) — was 32, which put the carousel tiles' title caption right underneath it. -->
+    <Grid Margin="40,0,40,84" VerticalAlignment="Bottom">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />

@@ -34,6 +34,12 @@ public partial class LibraryView : UserControl
             ((MainViewModel)DataContext).SelectedGame = tile;
     }
 
+    private void RenameGame_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.RenameGameCommand.CanExecute(null)) vm.RenameGameCommand.Execute(null);
+    }
+
     private void ChangeWallpaper_Click(object sender, RoutedEventArgs e)
     {
         var vm = (MainViewModel)DataContext;

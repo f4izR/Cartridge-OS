@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Media3D;
 using System.Windows.Input;
 using System.Windows.Threading;
 using CartridgeOS.Launcher.Input;
@@ -166,16 +167,30 @@ public partial class MainWindow : Window
             // D-Pad nav was silently dead while either panel was open.
             Debug.WriteLine($"[MainWindow] Settings/Search guard: {action}, focused={Keyboard.FocusedElement}, IsSettingsOpen={vm.IsSettingsOpen}");
 
-            // Belt-and-suspenders: if focus somehow isn't inside the Settings panel at all when a nav
-            // press arrives (e.g. it opened via mouse click on the gear icon, which never moves keyboard
-            // focus the way SettingsPanel's own IsVisibleChanged handler does), re-seed it before trying
-            // to move from it — otherwise MoveFocus below silently does nothing.
-            if (vm.IsSettingsOpen && action is GamepadAction.NavigateUp or GamepadAction.NavigateDown
-                or GamepadAction.NavigateLeft or GamepadAction.NavigateRight &&
+            // Belt-and-suspenders: if focus somehow isn't inside the Settings panel at all when ANY press
+            // arrives (e.g. it opened via mouse click on the gear icon, which never moves keyboard focus
+            // the way SettingsPanel's own IsVisibleChanged handler does — or a ComboBox's open dropdown
+            // Popup, which is its own visual root and isn't a descendant of SettingsHost at all), re-seed
+            // it before acting — otherwise Confirm below fires on whatever was focused before Settings
+            // opened (e.g. a Library game tile), which is how A/X ended up launching a game instead of
+            // selecting anything in Settings. Was previously scoped to just the Nav actions, which fixed
+            // MoveFocus doing nothing but left Confirm still hitting stale focus.
+            if (vm.IsSettingsOpen &&
                 (Keyboard.FocusedElement is not DependencyObject focused || !IsDescendantOf(SettingsHost, focused)))
             {
                 Debug.WriteLine("[MainWindow] focus wasn't inside Settings — re-seeding via FocusFirst");
                 SettingsHost.FocusFirst();
+            }
+
+            // Same belt-and-suspenders re-seed for Search: opening it via the mouse-click magnifier icon
+            // never moves keyboard focus either, and SearchBox/SearchKeyboardHost have no IsVisibleChanged
+            // hook of their own like SettingsPanel's FocusFirst — falls back to the search box itself, from
+            // which Down reaches the on-screen keyboard grid below it via ordinary directional MoveFocus.
+            if (vm.IsSearchOpen && !ReferenceEquals(Keyboard.FocusedElement, SearchBox) &&
+                (Keyboard.FocusedElement is not DependencyObject searchFocused || !IsDescendantOf(SearchKeyboardHost, searchFocused)))
+            {
+                Debug.WriteLine("[MainWindow] focus wasn't inside Search — re-seeding to SearchBox");
+                SearchBox.Focus();
             }
 
             // A synthetic KeyDown (tried first, see RaiseKeyOnFocused below — left in for other callers)
@@ -328,7 +343,15 @@ public partial class MainWindow : Window
             // selected.
             case RadioButton radio: radio.IsChecked = true; break;
             case ToggleButton toggle: toggle.IsChecked = !(toggle.IsChecked ?? false); break;
-            case ComboBox combo: combo.IsDropDownOpen = !combo.IsDropDownOpen; break;
+            // Re-focus the ComboBox itself after opening: WPF's default dropdown behavior can hand
+            // keyboard focus to the highlighted item inside the Popup, which is its own visual root (not
+            // a descendant of SettingsHost) — left alone, the next D-Pad press would look like focus had
+            // escaped Settings entirely. Keeping focus on the ComboBox lets AdjustComboBox's Up/Down
+            // handling above keep cycling the selection while the dropdown is visibly open.
+            case ComboBox combo:
+                combo.IsDropDownOpen = !combo.IsDropDownOpen;
+                if (combo.IsDropDownOpen) combo.Focus();
+                break;
             case ButtonBase button: button.Command?.Execute(button.CommandParameter); break;
         }
         Debug.WriteLine($"[MainWindow] ConfirmFocused on {Keyboard.FocusedElement}");
@@ -339,12 +362,18 @@ public partial class MainWindow : Window
     /// trusting MoveFocus to start from it (see the Settings/Search guard above).</summary>
     private static bool IsDescendantOf(DependencyObject ancestor, DependencyObject node)
     {
-        for (var current = node; current is not null; current = VisualTreeHelper.GetParent(current))
+        for (var current = node; current is not null; current = GetParent(current))
         {
             if (ReferenceEquals(current, ancestor)) return true;
         }
         return false;
     }
+
+    /// <summary>VisualTreeHelper.GetParent throws on anything that isn't a Visual/Visual3D (e.g. a
+    /// Hyperlink or Run, which are TextElements) — falls back to the logical tree for those, which is
+    /// enough to walk back up into a real Visual ancestor.</summary>
+    private static DependencyObject? GetParent(DependencyObject node) =>
+        node is Visual or Visual3D ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
 
     /// <summary>Keyboard/gamepad nav for the Recently Played screen: a fixed 3-row x 2-col layout where row 0
     /// (the hero) spans both columns, and rows 1-2 hold the 2x2 "other recent games" grid beneath it.</summary>
@@ -440,6 +469,9 @@ public partial class MainWindow : Window
 
     /// <summary>Forwarded by App on LT+RT toggle, and pushed once with the current value right after this window is created — the header pill is the only lock indicator now (see App.OnGamepadAction).</summary>
     public void UpdateCursorLocked(bool locked) => ((MainViewModel)DataContext).IsCursorLocked = locked;
+
+    /// <summary>Forwarded by App from GamepadWatcher.ControllerChanged, and pushed once with the current value right after this window is created — drives the corner tab-switch glyphs and the bottom hint bar (see MainViewModel.ControllerKind).</summary>
+    public void UpdateControllerKind(ControllerKind? kind) => ((MainViewModel)DataContext).ControllerKind = kind ?? ControllerKind.Generic;
 
     public void ShowUpdateAvailable(string version, string releaseUrl) => ((MainViewModel)DataContext).ShowUpdateAvailable(version, releaseUrl);
 
