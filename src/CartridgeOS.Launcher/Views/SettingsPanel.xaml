@@ -218,25 +218,13 @@
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="Wallpaper" Style="{StaticResource SettingsTabItemStyle}">
+                <TabItem Header="Artwork" Style="{StaticResource SettingsTabItemStyle}">
                     <StackPanel>
-                        <TextBlock Text="Background" Style="{StaticResource SettingsSectionHeadingStyle}" />
+                        <TextBlock Text="Home Background" Style="{StaticResource SettingsSectionHeadingStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Each game can have its own Home background — right-click a tile in Library (or press Menu/Options on a controller) for Change Home Background / Search Home Background Online / Revert Home Background. Without one set, Home falls back to that game's own artwork." Margin="0,0,0,20" />
 
-                        <RadioButton Content="Selected game's artwork" GroupName="WallpaperMode"
-                                     Style="{StaticResource SettingsRadioStyle}"
-                                     IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelectedGameArtwork}" />
-                        <RadioButton Content="Custom image" GroupName="WallpaperMode"
-                                     Style="{StaticResource SettingsRadioStyle}"
-                                     IsChecked="{Binding WallpaperMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=CustomImage}" />
-
-                        <Button Content="Browse..." Command="{Binding ChooseWallpaperCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                HorizontalAlignment="Left" Margin="0,4,0,6" />
-                        <TextBlock Text="{Binding CustomWallpaperPath}"
-                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
-
-                        <TextBlock Text="Home Carousel" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,20,0,10" />
+                        <TextBlock Text="Home Carousel" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,0,0,10" />
 
                         <CheckBox Content="Auto-Cycle Games" IsChecked="{Binding HomeCarouselAutoCycleEnabled}"
                                   Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
@@ -390,6 +378,10 @@
 
                         <TextBlock Text="Left Trigger + Right Trigger (held together)" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Text="Locks/unlocks the stick-driven cursor — handy if a worn stick drifts and drags the cursor around" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,20" />
+
+                        <TextBlock Text="Keyboard / Window" Style="{StaticResource SettingsSectionHeadingStyle}" />
+                        <TextBlock Text="Win + Shift + Left / Right" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Text="Moves Cartridge OS to the other monitor, on a multi-monitor setup" Style="{StaticResource SettingsDescriptionStyle}" Margin="0,0,0,20" />
 
                         <TextBlock Text="Testing the overlay" Style="{StaticResource SettingsSectionHeadingStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"

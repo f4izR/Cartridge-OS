@@ -15,6 +15,8 @@
         <StackPanel>
             <TextBlock Text="Power" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,10" />
 
+            <Button Content="Minimize" Command="{Binding MinimizeCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button x:Name="ExitToDesktopButton" Content="Exit to Desktop" Command="{Binding ExitToDesktopCommand}"
                     Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button Content="Shut Down Cartridge OS" Command="{Binding ShutDownCartridgeOsCommand}"

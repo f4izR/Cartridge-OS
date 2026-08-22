@@ -49,6 +49,8 @@ public sealed class MainViewModel : ViewModelBase
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _connectivityTimer;
     private readonly DispatcherTimer _homeCarouselTimer;
+    private readonly DispatcherTimer _homeCarouselProgressTimer;
+    private DateTime _homeCarouselCycleStartUtc;
     private readonly Dispatcher _dispatcher;
     private bool _isInternetReachable = true; // last real probe result — refined every ConnectivityProbeInterval, see ProbeConnectivityAsync
 
@@ -207,7 +209,8 @@ public sealed class MainViewModel : ViewModelBase
             _settings.HomeCarouselAutoCycleEnabled = value;
             OnPropertyChanged();
             SettingsStore.Save(_settings);
-            if (value) ResetHomeCarouselTimer(); else _homeCarouselTimer.Stop();
+            OnPropertyChanged(nameof(IsHomeCarouselAutoCycling));
+            if (value) ResetHomeCarouselTimer(); else StopHomeCarouselTimer();
         }
     }
 
@@ -336,6 +339,8 @@ public sealed class MainViewModel : ViewModelBase
 
     private void RefreshHomeCarouselSlots()
     {
+        OnPropertyChanged(nameof(IsHomeCarouselAutoCycling)); // games count (filtered/added/removed) can cross the 2-game threshold that gates auto-cycling
+
         var games = GamesView.Cast<GameTileViewModel>().ToList();
         if (games.Count == 0)
         {
@@ -395,7 +400,7 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     /// <summary>Drives the selection-follows-background behavior — deliberately Home-only; Library/Recently
-    /// Played get a plain gradient background regardless of WallpaperMode or SelectedGame.</summary>
+    /// Played get a plain gradient background regardless of SelectedGame.</summary>
     public bool IsHomeScreen => SelectedScreen == AppScreen.Home;
 
     private string _searchText = "";
@@ -615,23 +620,6 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _currentDateText, value);
     }
 
-    public WallpaperMode WallpaperMode
-    {
-        get => _settings.WallpaperMode;
-        set
-        {
-            if (_settings.WallpaperMode == value) return;
-            _settings.WallpaperMode = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
-            SettingsStore.Save(_settings);
-        }
-    }
-
-    public bool IsUsingGameArtworkBackground => WallpaperMode == WallpaperMode.SelectedGameArtwork;
-
-    public string? CustomWallpaperPath => _settings.CustomWallpaperPath;
-
     /// <summary>MRU list of directories previously picked for "Find More Games" (NVIDIA-style — most-recent-first,
     /// capped at MaxScanDirectories). Backed by AppSettings.ScanDirectories; this ObservableCollection is what the
     /// Settings combo box actually binds to.</summary>
@@ -658,13 +646,6 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _isRecursiveScan, value);
     }
 
-    private ImageSource? _customWallpaperImage;
-    public ImageSource? CustomWallpaperImage
-    {
-        get => _customWallpaperImage;
-        private set => SetProperty(ref _customWallpaperImage, value);
-    }
-
     private ImageSource? _homeBackgroundImage;
     /// <summary>Home's full-screen backdrop — decoded at BackgroundDecodeWidth (1920), not the ~200px tile
     /// thumbnail (GameTileViewModel.Artwork), which is exactly why the background looked pixelated when it
@@ -673,6 +654,19 @@ public sealed class MainViewModel : ViewModelBase
     {
         get => _homeBackgroundImage;
         private set => SetProperty(ref _homeBackgroundImage, value);
+    }
+
+    /// <summary>Whether the Play button's countdown ring should be visible at all — same condition
+    /// AdvanceHomeCarousel itself checks (fewer than two games means nothing to auto-cycle to).</summary>
+    public bool IsHomeCarouselAutoCycling => HomeCarouselAutoCycleEnabled && Games.Count >= 2;
+
+    private double _homeCarouselProgress;
+    /// <summary>0 (just switched) to 1 (about to switch) fraction of HomeCarouselAutoCycleInterval elapsed —
+    /// drives the countdown ring around the Home screen's Play button, see HomeView.xaml.</summary>
+    public double HomeCarouselProgress
+    {
+        get => _homeCarouselProgress;
+        private set => SetProperty(ref _homeCarouselProgress, value);
     }
 
     // Session-only memory of which games already had a hero-image fetch attempted, so re-selecting a game
@@ -686,10 +680,13 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ChangeArtworkCommand { get; }
     public ICommand RevertArtworkCommand { get; }
     public ICommand RenameGameCommand { get; }
+    public ICommand SearchArtworkOnlineCommand { get; }
     public ICommand ScanForGamesCommand { get; }
     public ICommand FindMoreGamesCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
-    public ICommand ChooseWallpaperCommand { get; }
+    public ICommand ChangeHomeBackgroundCommand { get; }
+    public ICommand RevertHomeBackgroundCommand { get; }
+    public ICommand SearchWallpaperOnlineCommand { get; }
     public ICommand ToggleSearchCommand { get; }
     public ICommand AppendSearchCharCommand { get; }
     public ICommand BackspaceSearchCommand { get; }
@@ -747,6 +744,7 @@ public sealed class MainViewModel : ViewModelBase
         ChangeArtworkCommand = new RelayCommand(ChangeArtwork);
         RevertArtworkCommand = new RelayCommand(RevertArtwork);
         RenameGameCommand = new RelayCommand(RenameGame);
+        SearchArtworkOnlineCommand = new RelayCommand(() => { if (SelectedGame is { } game) SearchOnline($"{game.Title} box art"); });
         DismissErrorCommand = new RelayCommand(() => HasErrorMessage = false);
         OpenUpdateCommand = new RelayCommand(() =>
         {
@@ -757,7 +755,9 @@ public sealed class MainViewModel : ViewModelBase
         ScanForGamesCommand = new RelayCommand(ScanForGames);
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
-        ChooseWallpaperCommand = new RelayCommand(async () => await ChooseWallpaperAsync());
+        ChangeHomeBackgroundCommand = new RelayCommand(async () => await ChangeHomeBackgroundAsync());
+        RevertHomeBackgroundCommand = new RelayCommand(RevertHomeBackground);
+        SearchWallpaperOnlineCommand = new RelayCommand(() => { if (SelectedGame is { } game) SearchOnline($"{game.Title} wallpaper"); });
         ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
         AppendSearchCharCommand = new RelayCommand<string>(AppendSearchChar);
         BackspaceSearchCommand = new RelayCommand(BackspaceSearchChar);
@@ -770,9 +770,6 @@ public sealed class MainViewModel : ViewModelBase
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
         GamesView.CollectionChanged += (_, _) => RefreshHomeCarouselSlots(); // covers search-filter changes, scan results, add/remove — anything that changes what's visible or its order
-
-        if (!string.IsNullOrEmpty(_settings.CustomWallpaperPath))
-            _ = LoadCustomWallpaperAsync(_settings.CustomWallpaperPath);
 
         if (_settings.ScanDirectories.Count == 0)
         {
@@ -831,7 +828,25 @@ public sealed class MainViewModel : ViewModelBase
 
         _homeCarouselTimer = new DispatcherTimer { Interval = HomeCarouselAutoCycleInterval };
         _homeCarouselTimer.Tick += (_, _) => AdvanceHomeCarousel();
-        if (HomeCarouselAutoCycleEnabled) _homeCarouselTimer.Start();
+        _homeCarouselProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _homeCarouselProgressTimer.Tick += (_, _) =>
+            HomeCarouselProgress = Math.Clamp((DateTime.UtcNow - _homeCarouselCycleStartUtc).TotalSeconds / HomeCarouselAutoCycleInterval.TotalSeconds, 0, 1);
+        if (HomeCarouselAutoCycleEnabled) StartHomeCarouselTimer();
+    }
+
+    private void StartHomeCarouselTimer()
+    {
+        _homeCarouselCycleStartUtc = DateTime.UtcNow;
+        HomeCarouselProgress = 0;
+        _homeCarouselTimer.Start();
+        _homeCarouselProgressTimer.Start();
+    }
+
+    private void StopHomeCarouselTimer()
+    {
+        _homeCarouselTimer.Stop();
+        _homeCarouselProgressTimer.Stop();
+        HomeCarouselProgress = 0;
     }
 
     public void StopBackgroundRescanning() => _rescanTimer.Stop();
@@ -841,7 +856,7 @@ public sealed class MainViewModel : ViewModelBase
     {
         _statusTimer.Stop();
         _connectivityTimer.Stop();
-        _homeCarouselTimer.Stop();
+        StopHomeCarouselTimer();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
     }
 
@@ -859,6 +874,9 @@ public sealed class MainViewModel : ViewModelBase
         if (index < 0) index = 0;
 
         SelectedGame = games[(index + 1) % games.Count];
+        // DispatcherTimer keeps ticking every HomeCarouselAutoCycleInterval on its own — only the progress
+        // ring's own start marker needs resetting here, not the timer itself.
+        _homeCarouselCycleStartUtc = DateTime.UtcNow;
     }
 
     /// <summary>Restarts the auto-cycle countdown from zero — called whenever the Home carousel's selection
@@ -866,8 +884,8 @@ public sealed class MainViewModel : ViewModelBase
     /// nudge doesn't get immediately undone by an auto-advance a moment later.</summary>
     public void ResetHomeCarouselTimer()
     {
-        _homeCarouselTimer.Stop();
-        if (HomeCarouselAutoCycleEnabled) _homeCarouselTimer.Start();
+        StopHomeCarouselTimer();
+        if (HomeCarouselAutoCycleEnabled) StartHomeCarouselTimer();
     }
 
     private bool FilterGame(object obj) =>
@@ -1065,6 +1083,7 @@ public sealed class MainViewModel : ViewModelBase
             ArtworkFetcher.PurgeCache(game.Title, game.Id);
             ArtworkCache.PurgeCacheFor(game.ArtworkPath);
             ArtworkCache.PurgeCacheFor(game.HeroImagePath);
+            ArtworkCache.PurgeCacheFor(game.CustomBackgroundPath);
         }
         catch (IOException) { }
     }
@@ -1076,7 +1095,9 @@ public sealed class MainViewModel : ViewModelBase
     private const double TileAspect = 2.0 / 3.0;
     private const double AspectTolerance = 0.05;
 
-    /// <summary>Replaces the selected game's own artwork (tile image + selected-game background) with a user-picked local file — distinct from ChooseWallpaperAsync's app-wide custom-background setting below.</summary>
+    /// <summary>Replaces the selected game's own tile artwork (and, as a fallback, its Home background if no
+    /// CustomBackgroundPath/HeroImagePath is set) with a user-picked local file — distinct from
+    /// ChangeHomeBackgroundAsync's dedicated per-game background override below.</summary>
     private void ChangeArtwork()
     {
         var game = SelectedGame;
@@ -1143,34 +1164,50 @@ public sealed class MainViewModel : ViewModelBase
         game.SetTitle(newTitle);
     }
 
-    private async Task ChooseWallpaperAsync()
+    /// <summary>Opens the default browser on a Google Images search for <paramref name="query"/> — used by both
+    /// per-game artwork search and the Home wallpaper search, no in-app picker needed since the user just
+    /// saves whatever image they like and picks it via the existing Browse dialogs.</summary>
+    private static void SearchOnline(string query) =>
+        Process.Start(new ProcessStartInfo($"https://www.google.com/search?tbm=isch&q={Uri.EscapeDataString(query)}") { UseShellExecute = true });
+
+    /// <summary>Sets the currently selected game's own Home background override — per-game, not a single
+    /// app-wide wallpaper (see Game.CustomBackgroundPath).</summary>
+    private async Task ChangeHomeBackgroundAsync()
     {
+        var game = SelectedGame;
+        if (game is null) return;
+
         var dialog = new OpenFileDialog
         {
-            Title = "Choose a wallpaper image",
+            Title = $"Choose a Home background for {game.Title}",
             Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
         };
         if (dialog.ShowDialog() != true) return;
 
         try
         {
-            _settings.CustomWallpaperPath = dialog.FileName;
-            _settings.WallpaperMode = WallpaperMode.CustomImage;
-            SettingsStore.Save(_settings);
-            OnPropertyChanged(nameof(WallpaperMode));
-            OnPropertyChanged(nameof(IsUsingGameArtworkBackground));
-            OnPropertyChanged(nameof(CustomWallpaperPath));
-
-            await LoadCustomWallpaperAsync(dialog.FileName);
+            _db.UpdateCustomBackgroundPath(game.Id, dialog.FileName);
+            game.SetCustomBackgroundPath(dialog.FileName);
+            await RefreshHomeBackgroundAsync();
         }
-        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException or System.Data.Common.DbException)
         {
-            ShowError($"Couldn't set that wallpaper — {ex.Message}");
+            ShowError($"Couldn't set that background — {ex.Message}");
         }
     }
 
-    private async Task LoadCustomWallpaperAsync(string path) =>
-        CustomWallpaperImage = await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+    /// <summary>Clears the selected game's Home background override, falling back to its auto-fetched hero/boxart.</summary>
+    private void RevertHomeBackground()
+    {
+        var game = SelectedGame;
+        if (game is null || game.CustomBackgroundPath is null) return;
+
+        try { _db.UpdateCustomBackgroundPath(game.Id, null); }
+        catch (System.Data.Common.DbException ex) { ShowError($"Couldn't revert background — {ex.Message}"); return; }
+
+        game.SetCustomBackgroundPath(null);
+        _ = RefreshHomeBackgroundAsync();
+    }
 
     /// <summary>Program Files (and x86) — present on every Windows install, so these seed the scan-directory
     /// MRU list before the user has ever browsed for one themselves. Skips a path that doesn't exist (some
@@ -1184,7 +1221,7 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     /// <summary>NVIDIA-style "add a directory to scan": browse once, and it joins the MRU combo box for next
-    /// time — same idea as ChooseWallpaperAsync's file picker, just for a folder and a list instead of one path.</summary>
+    /// time — same idea as ChangeHomeBackgroundAsync's file picker, just for a folder and a list instead of one path.</summary>
     private void BrowseScanDirectory()
     {
         var dialog = new OpenFolderDialog { Title = "Select a folder to scan for games" };
@@ -1224,7 +1261,7 @@ public sealed class MainViewModel : ViewModelBase
     private async Task RefreshHomeBackgroundAsync()
     {
         var game = SelectedGame;
-        string? path = game?.HeroImagePath ?? game?.ArtworkPath;
+        string? path = game?.CustomBackgroundPath ?? game?.HeroImagePath ?? game?.ArtworkPath;
         HomeBackgroundImage = string.IsNullOrEmpty(path) ? null : await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
 
         if (game is not null && game.HeroImagePath is null && _heroFetchAttempted.Add(game.Id))

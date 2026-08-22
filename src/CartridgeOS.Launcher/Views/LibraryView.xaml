@@ -14,7 +14,13 @@
         <ContextMenu x:Key="GameTileContextMenu" Opened="GameTileContextMenu_Opened">
             <MenuItem Header="Rename Game" Click="RenameGame_Click" />
             <MenuItem Header="Change Wallpaper" Click="ChangeWallpaper_Click" />
+            <MenuItem Header="Search Artwork Online" Click="SearchArtworkOnline_Click" />
             <MenuItem Tag="RevertArtwork" Header="Revert to Previous Artwork" Click="RevertArtwork_Click" />
+            <Separator Margin="0,0,20,0"/>
+            <MenuItem Header="Change Home Background" Click="ChangeHomeBackground_Click" />
+            <MenuItem Header="Search Home Background Online" Click="SearchWallpaperOnline_Click" />
+            <MenuItem Tag="RevertBackground" Header="Revert Home Background" Click="RevertHomeBackground_Click" />
+            <Separator Margin="0,0,20,0" />
             <MenuItem Header="Delete Game" Click="DeleteGame_Click" />
         </ContextMenu>
 

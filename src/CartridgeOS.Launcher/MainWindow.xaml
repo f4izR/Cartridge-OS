@@ -149,21 +149,18 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Home only: crisp, unblurred selected-game artwork (or the custom wallpaper) — the one screen
-             where the background follows selection. UniformToFill crops-to-fill rather than distorting, so
-             the art fills this rectangular frame without stretching regardless of its own aspect ratio. -->
+        <!-- Home only: crisp, unblurred selected-game artwork (or its per-game custom background override) —
+             the one screen where the background follows selection. UniformToFill crops-to-fill rather than
+             distorting, so the art fills this rectangular frame without stretching regardless of its own
+             aspect ratio. -->
         <Grid Grid.ColumnSpan="2" IsHitTestVisible="False"
               Visibility="{Binding IsHomeScreen, Converter={StaticResource BoolToVisibility}}">
             <!-- HomeBackgroundImage, not SelectedGame.Artwork: that's the ~200px tile thumbnail, badly
-                 pixelated when stretched full-screen — this is redecoded at 1920px (or the wide SteamGridDB
-                 hero image, once fetched) specifically for this. -->
+                 pixelated when stretched full-screen — this is redecoded at 1920px (custom background,
+                 SteamGridDB hero image, or boxart, in that priority — see RefreshHomeBackgroundAsync)
+                 specifically for this. -->
             <Image x:Name="BackgroundArt"
                    Source="{Binding HomeBackgroundImage}"
-                   Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource BoolToVisibility}}"
-                   Stretch="UniformToFill" />
-            <Image x:Name="CustomBackgroundArt"
-                   Source="{Binding CustomWallpaperImage}"
-                   Visibility="{Binding IsUsingGameArtworkBackground, Converter={StaticResource InverseBoolToVisibility}}"
                    Stretch="UniformToFill" />
             <!-- Bottom-up fade so the carousel/details text over it stays legible regardless of what the art
                  looks like there — there's no blur to fall back on for that here. Starts higher and reaches

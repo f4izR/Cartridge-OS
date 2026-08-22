@@ -13,4 +13,8 @@ public sealed class Game
     /// <summary>Wide banner image for the Home screen's full-screen backdrop — separate from ArtworkPath
     /// (portrait boxart), fetched lazily since most of the library never actually shows on Home.</summary>
     public string? HeroImagePath { get; set; }
+
+    /// <summary>User-picked override for this game's own Home background — takes priority over HeroImagePath
+    /// when set. Per-game (not a single app-wide wallpaper) so each game can have its own backdrop.</summary>
+    public string? CustomBackgroundPath { get; set; }
 }

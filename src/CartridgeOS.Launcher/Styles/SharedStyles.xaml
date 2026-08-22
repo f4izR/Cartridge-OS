@@ -10,6 +10,7 @@
     <conv:EnumToVisibilityConverter x:Key="EnumToVisibility" />
     <conv:PercentToPixelWidthConverter x:Key="PercentToPixelWidth" />
     <conv:ScaleConverter x:Key="Scale" />
+    <conv:ProgressToArcGeometryConverter x:Key="ProgressToArc" />
 
     <!-- Implicit (no x:Key) — replaces the default OS scrollbar chrome everywhere in the app (Settings
          panel, Library grid, anywhere else a ScrollViewer shows one) with a thin flat thumb matching the

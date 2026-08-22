@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Media3D;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using CartridgeOS.Launcher.Input;
 using CartridgeOS.Launcher.Services;
@@ -24,7 +25,6 @@ public partial class MainWindow : Window
 {
     // Home's background is crisp/unblurred now (no dimming) — full opacity crossfade.
     private const double BackgroundArtOpacity = 1.0;
-    private const double CustomBackgroundArtOpacity = 1.0;
 
     /// <summary>Read by App right as this window closes, to remember what to re-select next time it opens.</summary>
     public int? CurrentSelectedGameId => ((MainViewModel)DataContext).SelectedGame?.Id;
@@ -45,7 +45,6 @@ public partial class MainWindow : Window
                 // a beat after SelectedGame itself changes, so fading on SelectedGame would fire too early
                 // (against whatever the still-old Source was) and miss the swap this animation is meant for.
                 nameof(MainViewModel.HomeBackgroundImage) => (BackgroundArt, BackgroundArtOpacity),
-                nameof(MainViewModel.CustomWallpaperImage) => (CustomBackgroundArt, CustomBackgroundArtOpacity),
                 _ => (null, 0),
             };
             target?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, TimeSpan.FromMilliseconds(250)));
@@ -95,6 +94,19 @@ public partial class MainWindow : Window
             if (WindowState == WindowState.Minimized) return;
             if (IsForegroundWindowInThisProcess()) return;
             WindowState = WindowState.Minimized;
+        };
+
+        // Win+Shift+Left/Right (Windows' move-to-other-monitor shortcut) relocates a WindowState=Maximized
+        // WPF window but doesn't resize it to fill the new monitor — a long-standing WPF bug — leaving it
+        // stuck at the old monitor's size/position (reported by user: "can't shift it to the other
+        // displays"). Re-snap to whichever monitor it actually landed on, same physical-pixel
+        // SetWindowPos approach OverlayWindow already uses to target the right screen.
+        LocationChanged += (_, _) =>
+        {
+            if (WindowState != WindowState.Maximized) return;
+            nint hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == nint.Zero) return;
+            MonitorHelper.CoverMonitor(this, MonitorHelper.GetMonitorBounds(hwnd));
         };
 
         // Keyboard equivalents of gamepad nav/A/Y — don't rely on native ListBox/VirtualizingWrapPanel arrow-key
@@ -253,6 +265,10 @@ public partial class MainWindow : Window
         else if (vm.SelectedScreen == AppScreen.Home && visibleGames.Count > 0 &&
                  action is GamepadAction.NavigateLeft or GamepadAction.NavigateRight)
         {
+            var now = DateTime.UtcNow;
+            if (now - _lastHomeCarouselNavAt < HomeCarouselNavThrottle) return; // see HomeCarouselNavThrottle's own comment
+            _lastHomeCarouselNavAt = now;
+
             // Single horizontal row — only Left/Right apply, same visibleGames list the carousel itself binds
             // to. Wraps around at either end (mod, not clamp) for the "infinite" PS5-carousel feel — past the
             // last tile brings you back to the first, and vice versa. Mouse users can still scroll the bar
@@ -429,6 +445,14 @@ public partial class MainWindow : Window
     /// grid navigation underneath.</summary>
     private ContextMenu? _openGameContextMenu;
 
+    // Throttles Home's carousel specifically — GamepadWatcher's own 130ms repeat (tuned for the Library
+    // grid) and the keyboard's raw, untouched OS auto-repeat (often faster still) both drove this handler
+    // directly, so holding Left/Right stepped through the big cinematic carousel tile-by-tile far quicker
+    // than its slide animation/nav sound could keep up with. This is independent of input method (keyboard
+    // or gamepad) since it gates right here, at the one place both funnel through.
+    private static readonly TimeSpan HomeCarouselNavThrottle = TimeSpan.FromMilliseconds(220);
+    private DateTime _lastHomeCarouselNavAt = DateTime.MinValue;
+
     /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Options
     /// equivalent of right-clicking a tile (Xbox "Menu"/hamburger button, PS "Options" button). Effectively only
     /// reachable when no game is running — the window is minimized while a game runs (App.LaunchSelected), and
@@ -497,7 +521,7 @@ public partial class MainWindow : Window
         }
 
         var app = (App)Application.Current;
-        var vm = new PowerMenuViewModel(ExitToDesktop, app.ExitApplication, app.CurrentController);
+        var vm = new PowerMenuViewModel(ExitToDesktop, app.ExitApplication, MinimizeFromPowerMenu, app.CurrentController);
         _powerMenuWindow = new PowerMenuWindow(vm);
         _powerMenuWindow.Closed += (_, _) => _powerMenuWindow = null;
         _powerMenuWindow.Show();
@@ -509,6 +533,15 @@ public partial class MainWindow : Window
     {
         _powerMenuWindow?.Close();
         Close();
+    }
+
+    // What the old bare minimize title-bar button did — the Deactivated handler above only minimizes
+    // automatically when some other app takes focus, so this is still the only way to drop to the
+    // taskbar deliberately while staying focused on Cartridge OS.
+    private void MinimizeFromPowerMenu()
+    {
+        _powerMenuWindow?.Close();
+        WindowState = WindowState.Minimized;
     }
 
     /// <summary>Confirm/Play's entry point from every input path (gamepad/keyboard Confirm, double-click,

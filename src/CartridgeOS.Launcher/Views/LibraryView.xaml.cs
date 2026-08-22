@@ -46,8 +46,33 @@ public partial class LibraryView : UserControl
         if (vm.ChangeArtworkCommand.CanExecute(null)) vm.ChangeArtworkCommand.Execute(null);
     }
 
-    /// <summary>Enables/disables "Revert to Previous Artwork" for whatever game the menu is about to show for — covers
-    /// both trigger paths (right-click sets PlacementTarget natively, MainWindow.OpenGameContextMenu sets it explicitly).</summary>
+    private void SearchArtworkOnline_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.SearchArtworkOnlineCommand.CanExecute(null)) vm.SearchArtworkOnlineCommand.Execute(null);
+    }
+
+    private void ChangeHomeBackground_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.ChangeHomeBackgroundCommand.CanExecute(null)) vm.ChangeHomeBackgroundCommand.Execute(null);
+    }
+
+    private void SearchWallpaperOnline_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.SearchWallpaperOnlineCommand.CanExecute(null)) vm.SearchWallpaperOnlineCommand.Execute(null);
+    }
+
+    private void RevertHomeBackground_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (vm.RevertHomeBackgroundCommand.CanExecute(null)) vm.RevertHomeBackgroundCommand.Execute(null);
+    }
+
+    /// <summary>Enables/disables "Revert to Previous Artwork" and "Revert Home Background" for whatever game the
+    /// menu is about to show for — covers both trigger paths (right-click sets PlacementTarget natively,
+    /// MainWindow.OpenGameContextMenu sets it explicitly).</summary>
     private void GameTileContextMenu_Opened(object sender, RoutedEventArgs e)
     {
         var menu = (ContextMenu)sender;
@@ -57,6 +82,8 @@ public partial class LibraryView : UserControl
         // was silently a no-op before. menu.Items enumeration works regardless of naming.
         var revertItem = menu.Items.OfType<MenuItem>().FirstOrDefault(mi => Equals(mi.Tag, "RevertArtwork"));
         if (revertItem is not null) revertItem.IsEnabled = tile?.HasPreviousArtwork ?? false;
+        var revertBackgroundItem = menu.Items.OfType<MenuItem>().FirstOrDefault(mi => Equals(mi.Tag, "RevertBackground"));
+        if (revertBackgroundItem is not null) revertBackgroundItem.IsEnabled = tile?.CustomBackgroundPath is not null;
     }
 
     private void RevertArtwork_Click(object sender, RoutedEventArgs e)

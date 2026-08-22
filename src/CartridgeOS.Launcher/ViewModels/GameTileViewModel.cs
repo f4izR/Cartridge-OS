@@ -41,6 +41,10 @@ public sealed partial class GameTileViewModel : ViewModelBase
     /// <summary>Wide banner for the Home background, fetched lazily — see MainViewModel.RefreshHomeBackgroundAsync.</summary>
     public string? HeroImagePath => _game.HeroImagePath;
 
+    /// <summary>User-picked override for this game's own Home background — takes priority over HeroImagePath
+    /// when set. See MainViewModel.RefreshHomeBackgroundAsync.</summary>
+    public string? CustomBackgroundPath => _game.CustomBackgroundPath;
+
     /// <summary>Only reliably knowable from the exe path itself for Steam (steam:// URI) and Xbox/Store (shell:appsFolder) —
     /// every other launcher (Epic/GOG/Ubisoft/EA/Battle.net/Riot/manual) launches via a plain exe path with no marker to
     /// tell them apart, so this is null there rather than guessing.</summary>
@@ -107,6 +111,13 @@ public sealed partial class GameTileViewModel : ViewModelBase
     {
         _game.HeroImagePath = heroImagePath;
         OnPropertyChanged(nameof(HeroImagePath));
+    }
+
+    /// <summary>Null clears the override, falling Home's background back to HeroImagePath/ArtworkPath.</summary>
+    public void SetCustomBackgroundPath(string? customBackgroundPath)
+    {
+        _game.CustomBackgroundPath = customBackgroundPath;
+        OnPropertyChanged(nameof(CustomBackgroundPath));
     }
 
     public void SetArtworkPath(string artworkPath)

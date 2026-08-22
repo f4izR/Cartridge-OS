@@ -10,6 +10,7 @@ public sealed class PowerMenuViewModel : ViewModelBase
 {
     public ICommand TurnOffSystemCommand { get; }
     public ICommand RestartSystemCommand { get; }
+    public ICommand MinimizeCommand { get; }
     public ICommand ExitToDesktopCommand { get; }
     public ICommand ShutDownCartridgeOsCommand { get; }
 
@@ -19,10 +20,11 @@ public sealed class PowerMenuViewModel : ViewModelBase
     public string ConfirmLabel { get; }
     public string BackLabel { get; }
 
-    public PowerMenuViewModel(Action onExitToDesktop, Action onShutDownCartridgeOs, ControllerKind? controller)
+    public PowerMenuViewModel(Action onExitToDesktop, Action onShutDownCartridgeOs, Action onMinimize, ControllerKind? controller)
     {
         TurnOffSystemCommand = new RelayCommand(TurnOffSystem);
         RestartSystemCommand = new RelayCommand(RestartSystem);
+        MinimizeCommand = new RelayCommand(onMinimize);
         ExitToDesktopCommand = new RelayCommand(onExitToDesktop);
         ShutDownCartridgeOsCommand = new RelayCommand(onShutDownCartridgeOs);
 

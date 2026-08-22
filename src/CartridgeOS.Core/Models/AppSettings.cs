@@ -1,16 +1,7 @@
 namespace CartridgeOS.Core.Models;
 
-public enum WallpaperMode
-{
-    SelectedGameArtwork,
-    CustomImage,
-}
-
 public sealed class AppSettings
 {
-    public WallpaperMode WallpaperMode { get; set; } = WallpaperMode.SelectedGameArtwork;
-    public string? CustomWallpaperPath { get; set; }
-
     /// <summary>Whether the Home carousel auto-advances on its own timer (MainViewModel.AdvanceHomeCarousel)
     /// or only moves in response to the user's own input.</summary>
     public bool HomeCarouselAutoCycleEnabled { get; set; } = true;

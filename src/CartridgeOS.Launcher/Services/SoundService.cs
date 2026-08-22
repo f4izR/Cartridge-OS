@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.IO;
-using System.Media;
+using System.Windows.Media;
 
 namespace CartridgeOS.Launcher.Services;
 
@@ -15,9 +15,14 @@ public static class SoundService
 {
     private static readonly string SoundsDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Sounds");
 
-    private static readonly Lazy<SoundPlayer> NavigateSound = new(() => Load("nav.wav"));
-    private static readonly Lazy<SoundPlayer> ConfirmSound = new(() => Load("confirm.wav"));
-    private static readonly Lazy<SoundPlayer> TabSound = new(() => Load("tab.wav"));
+    // System.Windows.Media.MediaPlayer, not System.Media.SoundPlayer: SoundPlayer.Play() on a rapid repeat
+    // call (holding a nav key/stick) doesn't interrupt the still-playing sound, it queues behind it — every
+    // held-repeat nav sound stacked up and only started audibly once the backlog drained, instead of
+    // sounding continuous with each tile switch. MediaPlayer's Stop()+Play() cuts the previous playback off
+    // immediately, same "connected" feel the tile switch itself has.
+    private static readonly Lazy<MediaPlayer> NavigateSound = new(() => Load("nav.wav"));
+    private static readonly Lazy<MediaPlayer> ConfirmSound = new(() => Load("confirm.wav"));
+    private static readonly Lazy<MediaPlayer> TabSound = new(() => Load("tab.wav"));
 
     /// <summary>Settings-driven mutes (MainViewModel.NavigationSoundEnabled/ConfirmSoundEnabled/
     /// TabSwitchSoundEnabled) — plain static flags since every call site here is a static method with no
@@ -30,19 +35,21 @@ public static class SoundService
     public static void PlayConfirm() => Play(ConfirmSound, ConfirmEnabled);
     public static void PlayTabSwitch() => Play(TabSound, TabSwitchEnabled);
 
-    private static SoundPlayer Load(string fileName)
+    private static MediaPlayer Load(string fileName)
     {
-        var player = new SoundPlayer(Path.Combine(SoundsDir, fileName));
-        player.LoadAsync(); // pre-buffer so the first Play() call isn't the one paying the disk-read cost
+        var player = new MediaPlayer();
+        player.Open(new Uri(Path.Combine(SoundsDir, fileName)));
         return player;
     }
 
-    private static void Play(Lazy<SoundPlayer> sound, bool enabled, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
+    private static void Play(Lazy<MediaPlayer> sound, bool enabled, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
         if (!enabled) { Debug.WriteLine($"[Sound] {caller}: skipped, disabled in Settings"); return; }
         try
         {
-            sound.Value.Play();
+            var player = sound.Value;
+            player.Stop(); // resets Position to 0 — forces an immediate restart instead of Play() no-op'ing on an already-playing clip
+            player.Play();
             Debug.WriteLine($"[Sound] {caller}: played");
         }
         catch (Exception ex)

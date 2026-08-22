@@ -259,6 +259,24 @@ dotnet run --project src/CartridgeOS.Launcher -- --self-check-xbox
 
 ---
 
+## 📝 Release Notes
+
+### Unreleased
+
+- Fixed: "Quit Game" from the in-game overlay could silently do nothing for games launched via a stub/updater exe (e.g. Plants vs Zombies) — it now also closes the real game process, not just the already-exited stub.
+- Fixed: the launcher window could get stuck behind another app after alt-tabbing away from it.
+- Fixed: moving the launcher to another monitor with Win+Shift+Left/Right could leave it sized for the wrong monitor.
+- Fixed: the Home screen's Play button icon rendered outlined instead of filled on some Windows font versions (Home and Recently Played).
+- Fixed: holding Left/Right on the Home carousel switched tiles faster than the slide animation and nav sound could keep up with.
+- Fixed: navigation sounds queued up and played back-to-back after releasing a held direction, instead of each new sound cutting off the previous one immediately.
+- Added: a Minimize option in the Power menu.
+- Added: a countdown ring around the Home screen's Play button showing time left before the carousel auto-advances.
+- Added: "Search Artwork Online" / "Search Home Background Online" — opens a browser image search for the selected game, from the Library right-click menu.
+- Changed: each game can now have its own Home screen background image (previously one custom wallpaper applied to every game). Set/cleared per-game from the Library right-click menu (Change Home Background / Revert Home Background).
+- Changed: Settings' "Wallpaper" tab renamed to "Artwork".
+
+---
+
 ## 📌 Project Status
 
 Version 1 and most of Version 2 are built and running (see the User Guide above and `progress.md` for detail): fullscreen launcher, controller/keyboard/mouse navigation, artwork, recent games, manual add, all 7 launcher scanners plus the heuristic standalone/Xbox scanners, background rescanning, sound effects, named-pipe IPC to the Service, and right-stick mouse emulation. Not yet production-ready — see `production-readiness.md` for what's left before shipping (packaging, installer, reliability hardening, testing on real hardware/installs).

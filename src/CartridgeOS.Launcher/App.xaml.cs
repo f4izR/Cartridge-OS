@@ -474,6 +474,22 @@ public partial class App : Application
         {
             // already exited, or we don't have permission to kill it — nothing more to do
         }
+
+        // The tracked Process can be a stub/updater that already exited while the real, longer-lived
+        // game process kept running under the same exe name (see HandleGameProcessExitedAsync) — in that
+        // case _runningGameProcess.Kill() above throws InvalidOperationException and does nothing, so
+        // "Quit Game" silently fails to actually close the game (confirmed live with Plants vs Zombies).
+        // Same exeName heuristic as the stub-detection code, applied here to actually kill the real process.
+        if (!string.IsNullOrEmpty(_runningGameExePath))
+        {
+            string exeName = Path.GetFileNameWithoutExtension(_runningGameExePath);
+            foreach (var proc in Process.GetProcessesByName(exeName))
+            {
+                try { proc.Kill(); }
+                catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { }
+            }
+        }
+
         CloseOverlay();
     }
 
