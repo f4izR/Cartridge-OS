@@ -45,6 +45,19 @@ public static class ArtworkCache
         return Path.Combine(CacheDir, $"{hash}_{decodePixelWidth}.png");
     }
 
+    /// <summary>Copies a user-picked image (tile artwork or Home background) into this app's own storage so
+    /// it keeps working if the user later moves/deletes the original file they picked it from — same "custom"
+    /// folder ArtworkCropWindow already writes cropped results into. Called for every direct file pick;
+    /// ArtworkCropWindow's own output is already a copy, so it doesn't need to go through this too.</summary>
+    public static string CopyIntoStorage(string sourcePath)
+    {
+        string dir = Path.Combine(CacheDir, "custom");
+        Directory.CreateDirectory(dir);
+        string destPath = Path.Combine(dir, $"{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}");
+        File.Copy(sourcePath, destPath);
+        return destPath;
+    }
+
     /// <summary>Deletes every decoded-size variant cached for a source path (tile width, background
     /// width, any future width) — called when a game is removed so its cache entries don't linger
     /// forever (see production-readiness.md's "artwork cache doesn't grow unbounded" item). Globs by

@@ -193,12 +193,13 @@
                             </Grid.ColumnDefinitions>
                             <ComboBox Grid.Column="0" ItemsSource="{Binding ScanDirectories}"
                                       SelectedItem="{Binding SelectedScanDirectory}"
+                                      Style="{StaticResource ThemedComboBoxStyle}"
                                       IsEditable="False" Margin="0,0,8,0" />
                             <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseScanDirectoryCommand}"
                                     Style="{StaticResource PrimaryButtonStyle}" />
                         </Grid>
                         <CheckBox Content="Scan whole drive (finds games installed a few folders deep, e.g. Riot Games\VALORANT — slower)"
-                                  IsChecked="{Binding IsRecursiveScan}" Foreground="{StaticResource TextSecondaryBrush}"
+                                  IsChecked="{Binding IsRecursiveScan}" Style="{StaticResource ThemedCheckBoxStyle}"
                                   FontSize="12" Margin="0,0,0,8" />
                         <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
@@ -227,8 +228,8 @@
                         <TextBlock Text="Home Carousel" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,0,0,10" />
 
                         <CheckBox Content="Auto-Cycle Games" IsChecked="{Binding HomeCarouselAutoCycleEnabled}"
-                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
-                                  Margin="0,0,0,4" Cursor="Hand" />
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="Automatically advances the Home screen carousel to the next game every few seconds." />
 
@@ -242,16 +243,32 @@
                             <Run Text="Optional — leave blank to use the built-in key. Get your own free key at" />
                             <Hyperlink NavigateUri="https://www.steamgriddb.com/profile/preferences/api" RequestNavigate="Hyperlink_RequestNavigate">steamgriddb.com/profile/preferences/api</Hyperlink><Run Text="." />
                         </TextBlock>
-                        <TextBox Text="{Binding SteamGridDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource SettingsTextBoxStyle}" Margin="0,0,0,16" />
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding SteamGridDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource SettingsTextBoxStyle}" Margin="0,0,8,0" />
+                            <Button Grid.Column="1" Content="Use Default" Command="{Binding UseDefaultSteamGridDbApiKeyCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </Grid>
 
                         <TextBlock Text="TheGamesDB API Key" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}">
                             <Run Text="Optional — leave blank to use the built-in key. Get your own free key at" />
                             <Hyperlink NavigateUri="https://forums.thegamesdb.net" RequestNavigate="Hyperlink_RequestNavigate">forums.thegamesdb.net</Hyperlink><Run Text="." />
                         </TextBlock>
-                        <TextBox Text="{Binding TheGamesDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource SettingsTextBoxStyle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding TheGamesDbApiKeyOverride, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource SettingsTextBoxStyle}" Margin="0,0,8,0" />
+                            <Button Grid.Column="1" Content="Use Default" Command="{Binding UseDefaultTheGamesDbApiKeyCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </Grid>
                     </StackPanel>
                 </TabItem>
                 <TabItem Header="Storage" Style="{StaticResource SettingsTabItemStyle}">
@@ -263,6 +280,7 @@
                                    Text="Which drive's storage the Recently Played screen shows — useful if your games live on a different drive than Windows." />
                         <ComboBox ItemsSource="{Binding StorageDrives}"
                                   SelectedItem="{Binding SelectedStorageDrive}"
+                                  Style="{StaticResource ThemedComboBoxStyle}"
                                   IsEditable="False" HorizontalAlignment="Left" MinWidth="160" />
                     </StackPanel>
                 </TabItem>
@@ -271,20 +289,20 @@
                         <TextBlock Text="Sound" Style="{StaticResource SettingsSectionHeadingStyle}" />
 
                         <CheckBox Content="Navigation Sound" IsChecked="{Binding NavigationSoundEnabled}"
-                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
-                                  Margin="0,0,0,4" Cursor="Hand" />
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="The blip sound when moving between tiles." />
 
                         <CheckBox Content="Confirm Sound" IsChecked="{Binding ConfirmSoundEnabled}"
-                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
-                                  Margin="0,0,0,4" Cursor="Hand" />
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="The sound when confirming a selection." />
 
                         <CheckBox Content="Tab Switch Sound" IsChecked="{Binding TabSwitchSoundEnabled}"
-                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
-                                  Margin="0,0,0,4" Cursor="Hand" />
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="The sound when switching between Home, Recently Played, and Library." />
                     </StackPanel>
@@ -294,19 +312,31 @@
                         <TextBlock Text="Screen Saver" Style="{StaticResource SettingsSectionHeadingStyle}" />
 
                         <CheckBox Content="Enabled" IsChecked="{Binding ScreenSaverEnabled}"
-                                  Foreground="{StaticResource TextPrimaryBrush}" FontSize="14"
-                                  Margin="0,0,0,16" Cursor="Hand" />
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,16" />
 
                         <TextBlock Text="Start After" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="How long the PC needs to be idle (keyboard, mouse, and controller) before the screen saver takes over." />
                         <ComboBox ItemsSource="{Binding InactivityOptions}"
-                                  SelectedValuePath="Minutes" DisplayMemberPath="Label"
+                                  SelectedValuePath="Minutes"
                                   SelectedValue="{Binding ScreenSaverInactivityMinutes}"
-                                  IsEditable="False" HorizontalAlignment="Left" MinWidth="140" Margin="0,0,0,16" />
+                                  Style="{StaticResource ThemedComboBoxStyle}"
+                                  IsEditable="False" HorizontalAlignment="Left" MinWidth="140" Margin="0,0,0,16">
+                            <!-- Explicit ItemTemplate rather than DisplayMemberPath — DisplayMemberPath alone
+                                 doesn't reliably flow into the closed-box SelectionBoxItemTemplate with a
+                                 custom ComboBox template (ThemedComboBoxStyle), which showed the record's raw
+                                 ToString() instead of Label until this was made explicit. -->
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Text="Volume" Style="{StaticResource SettingsActionLabelStyle}" />
                         <Slider Value="{Binding ScreenSaverVolume}" Minimum="0" Maximum="1" TickFrequency="0.1"
+                                Style="{StaticResource ThemedSliderStyle}"
                                 IsSnapToTickEnabled="False" Width="200" HorizontalAlignment="Left" Margin="0,0,0,16" ValueChanged="Slider_ValueChanged" />
 
                         <TextBlock Text="Images" Style="{StaticResource SettingsActionLabelStyle}" />

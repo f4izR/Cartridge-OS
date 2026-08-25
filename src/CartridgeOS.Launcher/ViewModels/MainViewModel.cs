@@ -698,6 +698,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand DismissErrorCommand { get; }
     public ICommand OpenUpdateCommand { get; }
     public ICommand DismissUpdateCommand { get; }
+    public ICommand UseDefaultSteamGridDbApiKeyCommand { get; }
+    public ICommand UseDefaultTheGamesDbApiKeyCommand { get; }
 
     /// <summary>Puts a message on the on-screen error toast, auto-dismissed after a few seconds (or
     /// immediately via DismissErrorCommand). The only user-visible surface for a failure that isn't
@@ -766,6 +768,8 @@ public sealed class MainViewModel : ViewModelBase
         ClearScreenSaverImagesCommand = new RelayCommand(() => ScreenSaverImagesFolder = null);
         BrowseScreenSaverMusicCommand = new RelayCommand(() => ScreenSaverMusicFolder = BrowseForFolder("Select a folder of music for the screen saver") ?? ScreenSaverMusicFolder);
         ClearScreenSaverMusicCommand = new RelayCommand(() => ScreenSaverMusicFolder = null);
+        UseDefaultSteamGridDbApiKeyCommand = new RelayCommand(() => SteamGridDbApiKeyOverride = null);
+        UseDefaultTheGamesDbApiKeyCommand = new RelayCommand(() => TheGamesDbApiKeyOverride = null);
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
@@ -1027,7 +1031,7 @@ public sealed class MainViewModel : ViewModelBase
             Title = "Select artwork (optional — cancel to skip)",
             Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
         };
-        string? artworkPath = artworkDialog.ShowDialog() == true ? artworkDialog.FileName : null;
+        string? artworkPath = artworkDialog.ShowDialog() == true ? ArtworkCache.CopyIntoStorage(artworkDialog.FileName) : null;
 
         var game = new Game
         {
@@ -1117,7 +1121,14 @@ public sealed class MainViewModel : ViewModelBase
             {
                 var cropWindow = new ArtworkCropWindow(artworkPath) { Owner = Application.Current.MainWindow };
                 if (cropWindow.ShowDialog() != true || cropWindow.ResultPath is null) return;
-                artworkPath = cropWindow.ResultPath;
+                artworkPath = cropWindow.ResultPath; // already a copy in app storage, see ArtworkCropWindow.UseCrop
+            }
+            else
+            {
+                // Not going through the crop dialog (its own copy already lives in app storage) — copy the
+                // picked file ourselves so the tile doesn't go blank if the user later moves/deletes the
+                // original from wherever they picked it.
+                artworkPath = ArtworkCache.CopyIntoStorage(artworkPath);
             }
 
             _db.UpdateArtworkPath(game.Id, artworkPath);
@@ -1186,8 +1197,11 @@ public sealed class MainViewModel : ViewModelBase
 
         try
         {
-            _db.UpdateCustomBackgroundPath(game.Id, dialog.FileName);
-            game.SetCustomBackgroundPath(dialog.FileName);
+            // Copied into app storage rather than referenced in place — otherwise the background silently
+            // disappears the moment the user deletes/moves the original file they picked it from.
+            string backgroundPath = ArtworkCache.CopyIntoStorage(dialog.FileName);
+            _db.UpdateCustomBackgroundPath(game.Id, backgroundPath);
+            game.SetCustomBackgroundPath(backgroundPath);
             await RefreshHomeBackgroundAsync();
         }
         catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException or System.Data.Common.DbException)

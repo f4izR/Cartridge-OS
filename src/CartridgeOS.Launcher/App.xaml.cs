@@ -232,7 +232,13 @@ public partial class App : Application
             // unlike the old per-window binding), or — when nothing's running — open the Power menu in the
             // launcher (its normal binding, handled by MainWindow.HandleGamepadAction like any other action).
             if (action == GamepadAction.Power && _runningGameProcess is not null) ToggleOverlay();
-            else _launcherWindow?.HandleGamepadAction(action);
+            // While a game is running, the launcher window is only Hidden (not closed, see LaunchGame's
+            // comment) so it can be un-hidden cheaply later — but that means it was still silently receiving
+            // every gamepad action in the background (no overlay open, no modal target), so e.g. Confirm on
+            // whatever tile was last selected launched a second game out from under the one already running.
+            // Only the overlay (its own IGamepadInputTarget, handled by the modal-target branch above) should
+            // get input while a game owns the foreground.
+            else if (_runningGameProcess is null) _launcherWindow?.HandleGamepadAction(action);
         });
     }
 

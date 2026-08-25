@@ -127,6 +127,9 @@
         <Setter Property="FontSize" Value="16" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Cursor" Value="Hand" />
+        <!-- The circular template has no room for a dashed focus adorner to read correctly — it drew as a
+             square dotted box floating over the circle when the button took focus from a mouse click. -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -276,6 +279,9 @@
     <!-- Themed CheckBox — replaces the native OS checkbox (white square, system accent check) with a
          rounded box that fills brand cyan when checked, matching every other checked/selected state in
          this app (nav pills, selected tiles, etc. all use BrandCyanBrush). -->
+    <!-- Sci-fi toggle switch — a glowing pill track with a sliding knob and lit HUD tick marks at each
+         end, instead of a plain checkmark box. Still a CheckBox under the hood (same IsChecked bindings,
+         same x:Key) so every Settings usage picked this up with no other changes. -->
     <Style x:Key="ThemedCheckBoxStyle" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
         <Setter Property="FontSize" Value="13" />
@@ -284,23 +290,52 @@
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal">
-                        <Border x:Name="Box" Width="18" Height="18" CornerRadius="4"
-                                Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                                BorderThickness="1" VerticalAlignment="Center">
-                            <Path x:Name="Check" Data="M2,6 L5,9 L11,2" Stroke="{StaticResource TextOnAccentBrush}"
-                                  StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round" Visibility="Collapsed" Margin="1" />
-                        </Border>
-                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        <Grid Width="44" Height="22" VerticalAlignment="Center">
+                            <Border x:Name="Track" CornerRadius="11" Background="{StaticResource SurfaceBrush}"
+                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1.5" />
+                            <!-- Dead/live end ticks, like an avionics rocker switch — only the active side lights up. -->
+                            <Rectangle x:Name="OffTick" Width="2" Height="8" Fill="{StaticResource TextMutedBrush}"
+                                       Opacity="0.6" HorizontalAlignment="Left" Margin="6,0,0,0" />
+                            <Rectangle x:Name="OnTick" Width="2" Height="8" Fill="{StaticResource BrandCyanBrush}"
+                                       Opacity="0.25" HorizontalAlignment="Right" Margin="0,0,6,0" />
+                            <Border x:Name="Knob" Width="16" Height="16" CornerRadius="8" Margin="2,0,0,0"
+                                    Background="{StaticResource TextMutedBrush}" HorizontalAlignment="Left">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="KnobTransform" X="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+                        <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Box" Property="Background" Value="{StaticResource BrandCyanBrush}" />
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
-                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Track" Property="Background" Value="#1A3238" />
+                            <Setter TargetName="Knob" Property="Background" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="OffTick" Property="Opacity" Value="0.2" />
+                            <Setter TargetName="OnTick" Property="Opacity" Value="1" />
+                            <Setter TargetName="Knob" Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.85" BlurRadius="10" ShadowDepth="0" />
+                                </Setter.Value>
+                            </Setter>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="KnobTransform" Storyboard.TargetProperty="X" To="22" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="KnobTransform" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -385,6 +420,64 @@
                                 </ScrollViewer>
                             </Border>
                         </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Themed Slider — thin glowing cyan "power level" track with a lit dot thumb (dark core inside a
+         glowing ring, echoing the toggle switch's knob glow), replacing the plain OS slider chrome. -->
+    <Style x:Key="ThemedSliderStyle" TargetType="Slider">
+        <Setter Property="Height" Value="24" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center" Height="{TemplateBinding Height}">
+                        <Border Height="4" CornerRadius="2" Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" />
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Height="4" CornerRadius="2" Background="{StaticResource BrandCyanBrush}">
+                                                <Border.Effect>
+                                                    <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.7" BlurRadius="8" ShadowDepth="0" />
+                                                </Border.Effect>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb x:Name="Thumb" Width="16" Height="16">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Grid>
+                                                <Ellipse Fill="{StaticResource BrandCyanBrush}">
+                                                    <Ellipse.Effect>
+                                                        <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.9" BlurRadius="10" ShadowDepth="0" />
+                                                    </Ellipse.Effect>
+                                                </Ellipse>
+                                                <Ellipse Margin="5" Fill="{StaticResource TextOnAccentBrush}" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
