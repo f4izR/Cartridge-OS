@@ -3,9 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
              mc:Ignorable="d">
 
     <UserControl.Resources>
+        <conv:ThemePresetSelectedConverter x:Key="ThemePresetSelected" />
+
         <Style x:Key="SettingsRadioStyle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
             <Setter Property="FontSize" Value="14" />
@@ -99,11 +102,11 @@
              (Hyperlink is a TextElement, not a Visual, so GetParent throws InvalidOperationException on it). -->
         <Style TargetType="Hyperlink">
             <Setter Property="Focusable" Value="False" />
-            <Setter Property="Foreground" Value="{StaticResource BrandCyanBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource BrandCyanBrush}" />
             <Setter Property="TextDecorations" Value="Underline" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="{StaticResource BrandCyanHoverBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource BrandCyanHoverBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -219,7 +222,7 @@
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="Artwork" Style="{StaticResource SettingsTabItemStyle}">
+                <TabItem Header="Home" Style="{StaticResource SettingsTabItemStyle}">
                     <StackPanel>
                         <TextBlock Text="Home Background" Style="{StaticResource SettingsSectionHeadingStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
@@ -233,7 +236,106 @@
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="Automatically advances the Home screen carousel to the next game every few seconds." />
 
-                        <TextBlock Text="Artwork Sources" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,20,0,10" />
+                        <CheckBox Content="Show All Games" IsChecked="{Binding HomeShowAllGames}"
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="On: every game in your library can appear on Home. Off: only the games checked below." />
+
+                        <ItemsControl ItemsSource="{Binding Games}"
+                                      Visibility="{Binding HomeShowAllGames, Converter={StaticResource InverseBoolToVisibility}}"
+                                      Margin="0,0,0,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Title}" IsChecked="{Binding IncludeInHomeCarousel, Mode=OneWay}"
+                                              Command="{Binding DataContext.ToggleGameHomeVisibilityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                              CommandParameter="{Binding}"
+                                              Style="{StaticResource ThemedCheckBoxStyle}" FontSize="13"
+                                              Margin="0,0,0,4" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </TabItem>
+                <TabItem Header="Theme" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Accent Color" Style="{StaticResource SettingsSectionHeadingStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Colors the primary buttons, selection highlights, and background gradients throughout the app." Margin="0,0,0,14" />
+
+                        <TextBlock Text="Presets" Style="{StaticResource SettingsActionLabelStyle}" Margin="0,0,0,6" />
+                        <ItemsControl ItemsSource="{Binding ThemePresets}" Margin="0,0,0,16">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding DataContext.ApplyThemePresetCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="{Binding Name}" Cursor="Hand"
+                                            Background="Transparent" BorderThickness="0" Padding="0" Margin="4,4,8,8">
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Width="22" Height="30" CornerRadius="6,0,0,6" Background="{Binding Accent1}" />
+                                                <Border Width="22" Height="30" CornerRadius="0,6,6,0" Background="{Binding Accent2}" />
+                                            </StackPanel>
+                                            <!-- Ring around whichever swatch matches the currently-applied accent pair —
+                                                 Margin -3 lets it sit just outside the swatch itself (Grid doesn't clip). -->
+                                            <Border BorderThickness="2" CornerRadius="8" Margin="-3"
+                                                    BorderBrush="{StaticResource TextPrimaryBrush}" IsHitTestVisible="False">
+                                                <Border.Visibility>
+                                                    <MultiBinding Converter="{StaticResource ThemePresetSelected}">
+                                                        <Binding Path="Accent1" />
+                                                        <Binding Path="Accent2" />
+                                                        <Binding Path="DataContext.ThemeAccentColor1" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                        <Binding Path="DataContext.ThemeAccentColor2" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                    </MultiBinding>
+                                                </Border.Visibility>
+                                            </Border>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Custom" Style="{StaticResource SettingsActionLabelStyle}" Margin="0,0,0,6" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Pick your own gradient start and end colors." Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Button Command="{Binding PickCustomAccent1Command}" Cursor="Hand"
+                                    Background="{Binding ThemeAccentColor1}" BorderThickness="1"
+                                    BorderBrush="{StaticResource BorderBrush}" Width="60" Height="34"
+                                    Content="Start" Foreground="{StaticResource TextOnAccentBrush}" FontSize="11" Margin="0,0,8,0" />
+                            <Button Command="{Binding PickCustomAccent2Command}" Cursor="Hand"
+                                    Background="{Binding ThemeAccentColor2}" BorderThickness="1"
+                                    BorderBrush="{StaticResource BorderBrush}" Width="60" Height="34"
+                                    Content="End" Foreground="{StaticResource TextOnAccentBrush}" FontSize="11" />
+                        </StackPanel>
+                        <Button Content="Reset to Default" Command="{Binding ResetThemeCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+                    </StackPanel>
+                </TabItem>
+                <!-- Hidden for now (not deleted) — not needed yet. The underlying feature is fully wired
+                     (AppSettings.FullscreenEnabled, MainViewModel.FullscreenEnabled, MainWindow.xaml's
+                     Window.Style DataTrigger, App.ShowLauncher's WindowState branch); this tab is just the
+                     only thing a user could reach it from. Un-comment to bring it back.
+                <TabItem Header="Display" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Window" Style="{StaticResource SettingsSectionHeadingStyle}" />
+
+                        <CheckBox Content="Fullscreen" IsChecked="{Binding FullscreenEnabled}"
+                                  Style="{StaticResource ThemedCheckBoxStyle}" FontSize="14"
+                                  Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="On (default): an always-on-top, borderless console-style window. Off: a normal 1280×720 window with a title bar you can move, minimize, or close — takes effect immediately." />
+                    </StackPanel>
+                </TabItem>
+                -->
+                <TabItem Header="Artwork" Style="{StaticResource SettingsTabItemStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Artwork Sources" Style="{StaticResource SettingsSectionHeadingStyle}" Margin="0,0,0,10" />
 
                         <!-- Box art is fetched using a bundled API key shared by every install. Leaving these
                              blank uses that bundled key — filling one in switches this install to your own,

@@ -82,6 +82,13 @@
                                         <Binding Path="DataContext.SelectedGame" RelativeSource="{RelativeSource AncestorType=ListBox}" />
                                     </MultiBinding>
                                 </DataTrigger.Binding>
+                                <!-- BorderBrush is a plain (unanimated) Setter, not a ColorAnimation like the
+                                     scale above — a Storyboard can't hold a DynamicResource (Seal() needs to
+                                     freeze the whole timeline tree, which a live resource reference blocks),
+                                     and DynamicResource is what lets this repaint live when the theme changes.
+                                     DataTriggers revert Setters to the base value (Transparent) automatically
+                                     on exit, same as Library's GameTileStyle selection trigger. -->
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource BrandBlueBrush}" />
                                 <DataTrigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
@@ -99,9 +106,6 @@
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
-                                            <ColorAnimation Storyboard.TargetName="Card"
-                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
-                                                            To="#49C1ED" Duration="0:0:0.15" />
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </DataTrigger.EnterActions>
@@ -114,9 +118,6 @@
                                             <DoubleAnimation Storyboard.TargetName="Card"
                                                              Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
                                                              To="0.97" Duration="0:0:0.15" />
-                                            <ColorAnimation Storyboard.TargetName="Card"
-                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
-                                                            To="Transparent" Duration="0:0:0.15" />
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </DataTrigger.ExitActions>
@@ -195,9 +196,15 @@
             <!-- Condensed, not full-bleed: 3 columns x 3 rows (fixed-size content, centered in the
                  available space) — row 0 spans all 3 columns for the hero; rows 1-2 hold a 2x2 grid
                  of the next 4 recent games (cols 0-1) beside the stats panel (col 2, spanning both
-                 rows) — 1 hero + 4 grid tiles = 5 recently-played games shown in total. -->
-            <Grid MaxWidth="1240" HorizontalAlignment="Center" VerticalAlignment="Center"
-              Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+                 rows) — 1 hero + 4 grid tiles = 5 recently-played games shown in total.
+                 ScrollViewer, not a bare Grid — on a shorter window (windowed mode, or a smaller/secondary
+                 monitor) this content's natural height can exceed what's available; the root Grid above is
+                 ClipToBounds="True", so without a scroll wrapper the overflow was silently cut off instead
+                 of ever being reachable. VerticalAlignment="Top" (not Center) so it starts at the top and
+                 scrolls downward, rather than centering into negative space when everything doesn't fit. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding HasRecentGames, Converter={StaticResource BoolToVisibility}}">
+            <Grid MaxWidth="1240" HorizontalAlignment="Center" VerticalAlignment="Top">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -235,8 +242,8 @@
                                  DoubleAnimation/ColorAnimation target), but the scale+border together read as
                                  the whole card responding, not just its edge. -->
                             <DataTrigger Binding="{Binding IsContinuePlayingGameSelected}" Value="True">
-                                <Setter Property="Background" Value="{StaticResource HeroGradientBrush}" />
-                                <Setter Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <Setter Property="Background" Value="{DynamicResource HeroGradientBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                                 <!-- No TargetName — this Style is a plain FrameworkElement.Style (not a
                                      ControlTemplate), which has no NameScope for Storyboard.TargetName to
                                      resolve against, even for the same element the Style is applied to (hit
@@ -391,7 +398,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                         <Border Style="{StaticResource SystemOverviewIconStyle}">
                             <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                       Foreground="{StaticResource BrandCyanBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                       Foreground="{DynamicResource BrandCyanBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="{Binding Games.Count}" Style="{StaticResource SystemOverviewValueStyle}" />
@@ -437,6 +444,7 @@
                 </StackPanel>
             </Border>
             </Grid>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </UserControl>

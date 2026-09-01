@@ -76,6 +76,33 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Implicit (no x:Key) — every ToolTip in the app, themed to match instead of the default OS
+         balloon (white background, black text, square corners) that otherwise looks visibly out of
+         place against this dark UI. -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" Opacity="0.4" BlurRadius="14" ShadowDepth="4" Direction="270" />
+                        </Border.Effect>
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Home/Recently Played/Library nav bar: a rounded pill group, RadioButtons bound to
          MainViewModel.SelectedScreen via EnumToBoolean (same pattern the Settings wallpaper-mode
          radio buttons already use) — matches a reference design the user supplied. -->
@@ -95,7 +122,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
-                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -118,7 +145,7 @@
     <Style x:Key="PlayCircleButtonStyle" TargetType="Button">
         <Setter Property="Width" Value="44" />
         <Setter Property="Height" Value="44" />
-        <Setter Property="Background" Value="{StaticResource BrandCyanBrush}" />
+        <Setter Property="Background" Value="{DynamicResource BrandCyanBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
         <!-- Baked in here, not left to whoever sets Content="&#xE768;" to remember — a Segoe MDL2 Assets
              glyph rendered in the default font falls back to the "missing character" box (a hollow square),
@@ -139,10 +166,10 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Circle" Property="Fill" Value="{StaticResource BrandCyanHoverBrush}" />
+                            <Setter TargetName="Circle" Property="Fill" Value="{DynamicResource BrandCyanHoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Circle" Property="Fill" Value="{StaticResource BrandCyanPressedBrush}" />
+                            <Setter TargetName="Circle" Property="Fill" Value="{DynamicResource BrandCyanPressedBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -296,7 +323,7 @@
                             <!-- Dead/live end ticks, like an avionics rocker switch — only the active side lights up. -->
                             <Rectangle x:Name="OffTick" Width="2" Height="8" Fill="{StaticResource TextMutedBrush}"
                                        Opacity="0.6" HorizontalAlignment="Left" Margin="6,0,0,0" />
-                            <Rectangle x:Name="OnTick" Width="2" Height="8" Fill="{StaticResource BrandCyanBrush}"
+                            <Rectangle x:Name="OnTick" Width="2" Height="8" Fill="{DynamicResource BrandCyanBrush}"
                                        Opacity="0.25" HorizontalAlignment="Right" Margin="0,0,6,0" />
                             <Border x:Name="Knob" Width="16" Height="16" CornerRadius="8" Margin="2,0,0,0"
                                     Background="{StaticResource TextMutedBrush}" HorizontalAlignment="Left">
@@ -309,14 +336,14 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                             <Setter TargetName="Track" Property="Background" Value="#1A3238" />
-                            <Setter TargetName="Knob" Property="Background" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Knob" Property="Background" Value="{DynamicResource BrandCyanBrush}" />
                             <Setter TargetName="OffTick" Property="Opacity" Value="0.2" />
                             <Setter TargetName="OnTick" Property="Opacity" Value="1" />
                             <Setter TargetName="Knob" Property="Effect">
                                 <Setter.Value>
-                                    <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.85" BlurRadius="10" ShadowDepth="0" />
+                                    <DropShadowEffect Color="{DynamicResource BrandCyanColor}" Opacity="0.85" BlurRadius="10" ShadowDepth="0" />
                                 </Setter.Value>
                             </Setter>
                             <Trigger.EnterActions>
@@ -335,7 +362,7 @@
                             </Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -443,9 +470,9 @@
                                 <RepeatButton Command="Slider.DecreaseLarge">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="4" CornerRadius="2" Background="{StaticResource BrandCyanBrush}">
+                                            <Border Height="4" CornerRadius="2" Background="{DynamicResource BrandCyanBrush}">
                                                 <Border.Effect>
-                                                    <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.7" BlurRadius="8" ShadowDepth="0" />
+                                                    <DropShadowEffect Color="{DynamicResource BrandCyanColor}" Opacity="0.7" BlurRadius="8" ShadowDepth="0" />
                                                 </Border.Effect>
                                             </Border>
                                         </ControlTemplate>
@@ -466,9 +493,9 @@
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
                                             <Grid>
-                                                <Ellipse Fill="{StaticResource BrandCyanBrush}">
+                                                <Ellipse Fill="{DynamicResource BrandCyanBrush}">
                                                     <Ellipse.Effect>
-                                                        <DropShadowEffect Color="{StaticResource BrandCyanColor}" Opacity="0.9" BlurRadius="10" ShadowDepth="0" />
+                                                        <DropShadowEffect Color="{DynamicResource BrandCyanColor}" Opacity="0.9" BlurRadius="10" ShadowDepth="0" />
                                                     </Ellipse.Effect>
                                                 </Ellipse>
                                                 <Ellipse Margin="5" Fill="{StaticResource TextOnAccentBrush}" />

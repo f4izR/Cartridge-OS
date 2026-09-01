@@ -36,6 +36,7 @@ public sealed class GameDatabase
         AddColumnIfMissing(connection, "TotalPlaytimeMinutes", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "HeroImagePath", "TEXT");
         AddColumnIfMissing(connection, "CustomBackgroundPath", "TEXT");
+        AddColumnIfMissing(connection, "IncludeInHomeCarousel", "INTEGER NOT NULL DEFAULT 1");
     }
 
     // This directory also holds settings.json, the artwork cache, and every *.log file — GameDatabase
@@ -159,6 +160,16 @@ public sealed class GameDatabase
         command.ExecuteNonQuery();
     }
 
+    public void UpdateIncludeInHomeCarousel(int id, bool includeInHomeCarousel)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE Games SET IncludeInHomeCarousel = $include WHERE Id = $id;";
+        command.Parameters.AddWithValue("$include", includeInHomeCarousel ? 1 : 0);
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>Adds elapsed minutes to a game's running total playtime — called once when the game exits (only reachable for a directly-tracked process, same limitation as the in-game overlay).</summary>
     public void AddPlaytime(int id, int minutes)
     {
@@ -184,7 +195,7 @@ public sealed class GameDatabase
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Title, ExecutablePath, ArtworkPath, LaunchArgs, LastPlayedUtc, TotalPlaytimeMinutes, HeroImagePath, CustomBackgroundPath FROM Games ORDER BY Title;";
+        command.CommandText = "SELECT Id, Title, ExecutablePath, ArtworkPath, LaunchArgs, LastPlayedUtc, TotalPlaytimeMinutes, HeroImagePath, CustomBackgroundPath, IncludeInHomeCarousel FROM Games ORDER BY Title;";
         using var reader = command.ExecuteReader();
 
         var games = new List<Game>();
@@ -200,7 +211,8 @@ public sealed class GameDatabase
                 LastPlayedUtc = reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5)),
                 TotalPlaytimeMinutes = reader.GetInt32(6),
                 HeroImagePath = reader.IsDBNull(7) ? null : reader.GetString(7),
-                CustomBackgroundPath = reader.IsDBNull(8) ? null : reader.GetString(8)
+                CustomBackgroundPath = reader.IsDBNull(8) ? null : reader.GetString(8),
+                IncludeInHomeCarousel = reader.GetInt32(9) != 0
             });
         }
         return games;

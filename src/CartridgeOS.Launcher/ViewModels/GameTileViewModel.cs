@@ -120,6 +120,16 @@ public sealed partial class GameTileViewModel : ViewModelBase
         OnPropertyChanged(nameof(CustomBackgroundPath));
     }
 
+    /// <summary>Whether this game can appear in the Home carousel when Settings' "Show All Games" is off —
+    /// see AppSettings.HomeShowAllGames / MainViewModel.RefreshHomeCarouselSlots.</summary>
+    public bool IncludeInHomeCarousel => _game.IncludeInHomeCarousel;
+
+    public void SetIncludeInHomeCarousel(bool includeInHomeCarousel)
+    {
+        _game.IncludeInHomeCarousel = includeInHomeCarousel;
+        OnPropertyChanged(nameof(IncludeInHomeCarousel));
+    }
+
     public void SetArtworkPath(string artworkPath)
     {
         _previousArtworkPath = _game.ArtworkPath;

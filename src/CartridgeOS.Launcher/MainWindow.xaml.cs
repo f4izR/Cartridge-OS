@@ -26,8 +26,24 @@ public partial class MainWindow : Window
     // Home's background is crisp/unblurred now (no dimming) — full opacity crossfade.
     private const double BackgroundArtOpacity = 1.0;
 
+    // Must match the Width/Height Setters on Window.Style's FullscreenEnabled=False DataTrigger (see
+    // MainWindow.xaml) — that Style sizes the window, CenterAsWindowed below only positions it.
+    private const double WindowedWidth = 1280;
+    private const double WindowedHeight = 720;
+
     /// <summary>Read by App right as this window closes, to remember what to re-select next time it opens.</summary>
     public int? CurrentSelectedGameId => ((MainViewModel)DataContext).SelectedGame?.Id;
+
+    /// <summary>Centers the window on whatever screen it's currently on, at the fixed windowed size —
+    /// called once at startup if windowed mode is already the saved setting, and again live whenever
+    /// Settings > Display switches into it, since a Style Setter changing Width/Height doesn't reposition
+    /// an already-placed window to match.</summary>
+    private void CenterAsWindowed()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Left + (workArea.Width - WindowedWidth) / 2;
+        Top = workArea.Top + (workArea.Height - WindowedHeight) / 2;
+    }
 
     public MainWindow(int? restoreSelectedGameId = null)
     {
@@ -49,6 +65,17 @@ public partial class MainWindow : Window
             };
             target?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, TimeSpan.FromMilliseconds(250)));
         };
+
+        // Window.Style's DataTrigger (see MainWindow.xaml) already swaps WindowState/Width/Height when this
+        // flips, but a Setter doesn't retroactively move an already-positioned window — recenter explicitly
+        // whenever windowed mode turns on, mid-session (Settings) or at startup. WindowedWidth/Height must
+        // match the DataTrigger's Width/Height Setters.
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(MainViewModel.FullscreenEnabled) || vm.FullscreenEnabled) return;
+            Dispatcher.BeginInvoke(CenterAsWindowed);
+        };
+        if (!vm.FullscreenEnabled) Loaded += (_, _) => CenterAsWindowed();
 
         if (restoreSelectedGameId is { } id)
         {
@@ -91,6 +118,10 @@ public partial class MainWindow : Window
         // minimizing out from under an owned dialog would be exactly the wrong thing to do there.
         Deactivated += (_, _) =>
         {
+            // Only relevant to the fullscreen/topmost look — a normal windowed instance (Settings >
+            // Display) isn't fighting anything for foreground space, so it should behave like any other
+            // window and just sit there when it loses focus, not auto-minimize on every alt-tab away.
+            if (!vm.FullscreenEnabled) return;
             if (WindowState == WindowState.Minimized) return;
             if (IsForegroundWindowInThisProcess()) return;
             WindowState = WindowState.Minimized;
@@ -262,25 +293,30 @@ public partial class MainWindow : Window
         {
             HandleRecentlyPlayedNavigation(vm, action);
         }
-        else if (vm.SelectedScreen == AppScreen.Home && visibleGames.Count > 0 &&
+        else if (vm.SelectedScreen == AppScreen.Home &&
                  action is GamepadAction.NavigateLeft or GamepadAction.NavigateRight)
         {
+            // Home's own curated list (Settings > Home > Show All Games), not the raw visibleGames above —
+            // otherwise Left/Right could land on (and background) a game hidden from the carousel.
+            var homeGames = vm.GetHomeCarouselGames();
+            if (homeGames.Count == 0) return;
+
             var now = DateTime.UtcNow;
             if (now - _lastHomeCarouselNavAt < HomeCarouselNavThrottle) return; // see HomeCarouselNavThrottle's own comment
             _lastHomeCarouselNavAt = now;
 
-            // Single horizontal row — only Left/Right apply, same visibleGames list the carousel itself binds
-            // to. Wraps around at either end (mod, not clamp) for the "infinite" PS5-carousel feel — past the
-            // last tile brings you back to the first, and vice versa. Mouse users can still scroll the bar
+            // Single horizontal row — only Left/Right apply, same list the carousel itself binds to. Wraps
+            // around at either end (mod, not clamp) for the "infinite" PS5-carousel feel — past the last
+            // tile brings you back to the first, and vice versa. Mouse users can still scroll the bar
             // normally; this is specifically the keyboard/gamepad interaction.
-            int index = vm.SelectedGame is null ? 0 : visibleGames.IndexOf(vm.SelectedGame);
+            int index = vm.SelectedGame is null ? 0 : homeGames.IndexOf(vm.SelectedGame);
             if (index < 0) index = 0;
 
             int step = action == GamepadAction.NavigateLeft ? -1 : 1;
-            int newIndex = (index + step + visibleGames.Count) % visibleGames.Count;
+            int newIndex = (index + step + homeGames.Count) % homeGames.Count;
 
             if (newIndex != index) SoundService.PlayNavigate();
-            vm.SelectedGame = visibleGames[newIndex];
+            vm.SelectedGame = homeGames[newIndex];
             vm.ResetHomeCarouselTimer();
         }
 

@@ -54,7 +54,7 @@
                                 </Grid.RowDefinitions>
                                 <Border x:Name="AccentTint" Grid.RowSpan="2" CornerRadius="10" Opacity="0" IsHitTestVisible="False">
                                     <Border.Background>
-                                        <SolidColorBrush Color="#51E7ED" />
+                                        <SolidColorBrush Color="{DynamicResource BrandCyanColor}" />
                                     </Border.Background>
                                 </Border>
                                 <Border Grid.Row="0" Margin="10" CornerRadius="6" Background="{StaticResource SurfaceHoverBrush}">
@@ -135,6 +135,14 @@
                                 </DataTrigger.ExitActions>
                             </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
+                                <!-- BorderBrush is a plain (unanimated) Setter, not a ColorAnimation like the
+                                     scale/tint below — a Storyboard can't hold a DynamicResource (Seal() needs
+                                     to freeze the whole timeline tree, which a live resource reference blocks),
+                                     and DynamicResource is what lets this repaint live when the theme changes
+                                     instead of freezing at the color the app happened to launch with. Triggers
+                                     revert Setters to the base value (Transparent) automatically on exit, same
+                                     as the animated properties below. -->
+                                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource BrandBlueBrush}" />
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
@@ -150,9 +158,6 @@
                                                     <CubicEase EasingMode="EaseOut" />
                                                 </DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
-                                            <ColorAnimation Storyboard.TargetName="Tile"
-                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
-                                                            To="#49C1ED" Duration="0:0:0.15" />
                                             <DoubleAnimation Storyboard.TargetName="AccentTint"
                                                              Storyboard.TargetProperty="Opacity"
                                                              To="0.08" Duration="0:0:0.15" />
@@ -166,9 +171,6 @@
                                                              To="1" Duration="0:0:0.15" />
                                             <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
                                                              To="1" Duration="0:0:0.15" />
-                                            <ColorAnimation Storyboard.TargetName="Tile"
-                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
-                                                            To="Transparent" Duration="0:0:0.15" />
                                             <DoubleAnimation Storyboard.TargetName="AccentTint"
                                                              Storyboard.TargetProperty="Opacity"
                                                              To="0" Duration="0:0:0.15" />

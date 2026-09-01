@@ -126,6 +126,9 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        var settings = SettingsStore.Load();
+        ThemeService.Apply(settings.ThemeAccentColor1, settings.ThemeAccentColor2);
+
         // Never shown — exists purely to give GlobalHotkey a stable native window handle that
         // outlives the launcher window being opened and closed repeatedly.
         _coreWindow = new Window { Width = 0, Height = 0, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Visibility = Visibility.Hidden };
@@ -361,7 +364,12 @@ public partial class App : Application
             if (_pendingUpdate is { } update) _launcherWindow.ShowUpdateAvailable(update.Version, update.ReleaseUrl);
         }
 
-        _launcherWindow.WindowState = WindowState.Maximized;
+        // Un-minimizes it back to whatever look Settings > Display currently has it set to — the
+        // fullscreen/topmost Deactivated handler (MainWindow.xaml.cs) is what minimized it in the first
+        // place while reachable that way; a windowed instance was never auto-minimized, so Normal is
+        // already right for it (and re-forcing Maximized here would fight the Style's own WindowState Setter).
+        var vm = (MainViewModel)_launcherWindow.DataContext;
+        _launcherWindow.WindowState = vm.FullscreenEnabled ? WindowState.Maximized : WindowState.Normal;
         _launcherWindow.Show();
         _launcherWindow.Activate();
     }

@@ -1,7 +1,10 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Brand -->
+    <!-- Brand — replaced wholesale by ThemeService.Apply (Settings > Theme) at runtime. Reference these
+         with DynamicResource everywhere, never StaticResource: a Style/ControlTemplate freezes whatever a
+         StaticResource resolves to the first time it's sealed (first render of any control using it),
+         so a StaticResource here would stop updating after that first paint. -->
     <Color x:Key="BrandCyanColor">#51E7ED</Color>
     <Color x:Key="BrandBlueColor">#49C1ED</Color>
     <Color x:Key="BrandDeepBlueColor">#168DDC</Color>
@@ -61,7 +64,7 @@
 
     <!-- Primary button -->
     <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource BrandCyanBrush}" />
+        <Setter Property="Background" Value="{DynamicResource BrandCyanBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="18,10" />
@@ -82,16 +85,16 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandCyanHoverBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource BrandCyanHoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandCyanPressedBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource BrandCyanPressedBrush}" />
                         </Trigger>
                         <!-- The currently D-Pad/keyboard-selected button in a focus-navigable list (Power
                              menu, Settings, game context menu) — previously relied on the near-invisible
                              default focus adorner, which read as "nothing is highlighted." -->
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

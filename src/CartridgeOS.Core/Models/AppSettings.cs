@@ -6,6 +6,20 @@ public sealed class AppSettings
     /// or only moves in response to the user's own input.</summary>
     public bool HomeCarouselAutoCycleEnabled { get; set; } = true;
 
+    /// <summary>Whether the launcher runs as an always-on-top, chrome-less fullscreen "console" (default,
+    /// matching a game console dashboard) or a normal bordered window at a fixed size. See MainWindow.xaml's
+    /// Window.Style DataTrigger and App.ShowLauncher.</summary>
+    public bool FullscreenEnabled { get; set; } = true;
+
+    /// <summary>Whether every game in the library appears in the Home carousel (default) or only the ones
+    /// individually opted in via Game.IncludeInHomeCarousel — see MainViewModel.RefreshHomeCarouselSlots.</summary>
+    public bool HomeShowAllGames { get; set; } = true;
+
+    /// <summary>The app's accent color pair (hex), used for buttons, selection highlights, and the brand
+    /// gradient — see Launcher's ThemeService. Defaults match the original hardcoded Theme.xaml colors.</summary>
+    public string ThemeAccentColor1 { get; set; } = "#51E7ED";
+    public string ThemeAccentColor2 { get; set; } = "#168DDC";
+
     /// <summary>Most-recently-used "Find More Games" scan directories, most-recent-first, capped at
     /// MainViewModel.MaxScanDirectories. Empty means "no directory chosen yet — use the default sweep".</summary>
     public List<string> ScanDirectories { get; set; } = [];

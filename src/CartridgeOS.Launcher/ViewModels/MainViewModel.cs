@@ -214,6 +214,75 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Whether the Home carousel shows every game in the library (default) or only the ones
+    /// individually checked in Settings > Artwork > Home Carousel — see RefreshHomeCarouselSlots.</summary>
+    public bool HomeShowAllGames
+    {
+        get => _settings.HomeShowAllGames;
+        set
+        {
+            if (_settings.HomeShowAllGames == value) return;
+            _settings.HomeShowAllGames = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+            RefreshHomeCarouselSlots();
+        }
+    }
+
+    /// <summary>Fullscreen (always-on-top, chrome-less) vs. a normal fixed-size bordered window — see
+    /// MainWindow.xaml's Window.Style DataTrigger, which actually reacts to this property.</summary>
+    public bool FullscreenEnabled
+    {
+        get => _settings.FullscreenEnabled;
+        set
+        {
+            if (_settings.FullscreenEnabled == value) return;
+            _settings.FullscreenEnabled = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    public IReadOnlyList<ThemePreset> ThemePresets => ThemeService.Presets;
+
+    public string ThemeAccentColor1
+    {
+        get => _settings.ThemeAccentColor1;
+        set
+        {
+            if (_settings.ThemeAccentColor1 == value) return;
+            _settings.ThemeAccentColor1 = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+            ThemeService.Apply(_settings.ThemeAccentColor1, _settings.ThemeAccentColor2);
+        }
+    }
+
+    public string ThemeAccentColor2
+    {
+        get => _settings.ThemeAccentColor2;
+        set
+        {
+            if (_settings.ThemeAccentColor2 == value) return;
+            _settings.ThemeAccentColor2 = value;
+            OnPropertyChanged();
+            SettingsStore.Save(_settings);
+            ThemeService.Apply(_settings.ThemeAccentColor1, _settings.ThemeAccentColor2);
+        }
+    }
+
+    /// <summary>Themed in-app color picker (ColorPickerWindow) rather than the native
+    /// System.Windows.Forms.ColorDialog — that dialog is OS chrome and can't be made to match the rest
+    /// of the app, which is exactly what Settings > Theme's custom accent pickers need.</summary>
+    private void PickCustomAccent(bool isFirst)
+    {
+        string current = isFirst ? ThemeAccentColor1 : ThemeAccentColor2;
+        var dialog = new ColorPickerWindow(current, isFirst ? "Start Color" : "End Color") { Owner = Application.Current.MainWindow };
+        if (dialog.ShowDialog() != true) return;
+
+        if (isFirst) ThemeAccentColor1 = dialog.SelectedColor; else ThemeAccentColor2 = dialog.SelectedColor;
+    }
+
     /// <summary>Preset options for the inactivity-duration combo box — a free-text seconds/minutes field
     /// would need its own validation for no real benefit over a handful of sensible presets.</summary>
     public static IReadOnlyList<InactivityOption> InactivityOptions { get; } =
@@ -337,11 +406,28 @@ public sealed class MainViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<HomeCarouselSlot> HomeCarouselSlots { get; } = [];
 
+    /// <summary>The games eligible to appear on Home — every search-filtered game normally, or only the
+    /// ones checked in Settings > Home when HomeShowAllGames is off (falling back to the full list if
+    /// nothing's been opted in yet, rather than showing an empty carousel). MainWindow's keyboard/gamepad
+    /// Home navigation and AdvanceHomeCarousel's auto-cycle both need this same list — using the raw,
+    /// uncurated GamesView in either one let a hidden game's background/selection reappear while cycling
+    /// even though its tile never showed in the carousel.</summary>
+    public List<GameTileViewModel> GetHomeCarouselGames()
+    {
+        var games = GamesView.Cast<GameTileViewModel>().ToList();
+        if (!HomeShowAllGames)
+        {
+            var curated = games.Where(g => g.IncludeInHomeCarousel).ToList();
+            if (curated.Count > 0) games = curated;
+        }
+        return games;
+    }
+
     private void RefreshHomeCarouselSlots()
     {
         OnPropertyChanged(nameof(IsHomeCarouselAutoCycling)); // games count (filtered/added/removed) can cross the 2-game threshold that gates auto-cycling
 
-        var games = GamesView.Cast<GameTileViewModel>().ToList();
+        var games = GetHomeCarouselGames();
         if (games.Count == 0)
         {
             HomeCarouselSlots.Clear();
@@ -686,6 +772,11 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ToggleSettingsCommand { get; }
     public ICommand ChangeHomeBackgroundCommand { get; }
     public ICommand RevertHomeBackgroundCommand { get; }
+    public ICommand ToggleGameHomeVisibilityCommand { get; }
+    public ICommand ApplyThemePresetCommand { get; }
+    public ICommand PickCustomAccent1Command { get; }
+    public ICommand PickCustomAccent2Command { get; }
+    public ICommand ResetThemeCommand { get; }
     public ICommand SearchWallpaperOnlineCommand { get; }
     public ICommand ToggleSearchCommand { get; }
     public ICommand AppendSearchCharCommand { get; }
@@ -759,6 +850,20 @@ public sealed class MainViewModel : ViewModelBase
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ChangeHomeBackgroundCommand = new RelayCommand(async () => await ChangeHomeBackgroundAsync());
         RevertHomeBackgroundCommand = new RelayCommand(RevertHomeBackground);
+        ToggleGameHomeVisibilityCommand = new RelayCommand<GameTileViewModel>(ToggleGameHomeVisibility);
+        ApplyThemePresetCommand = new RelayCommand<ThemePreset>(preset =>
+        {
+            if (preset is null) return;
+            ThemeAccentColor1 = preset.Accent1;
+            ThemeAccentColor2 = preset.Accent2;
+        });
+        PickCustomAccent1Command = new RelayCommand(() => PickCustomAccent(isFirst: true));
+        PickCustomAccent2Command = new RelayCommand(() => PickCustomAccent(isFirst: false));
+        ResetThemeCommand = new RelayCommand(() =>
+        {
+            ThemeAccentColor1 = ThemeService.DefaultAccent1;
+            ThemeAccentColor2 = ThemeService.DefaultAccent2;
+        });
         SearchWallpaperOnlineCommand = new RelayCommand(() => { if (SelectedGame is { } game) SearchOnline($"{game.Title} wallpaper"); });
         ToggleSearchCommand = new RelayCommand(() => IsSearchOpen = !IsSearchOpen);
         AppendSearchCharCommand = new RelayCommand<string>(AppendSearchChar);
@@ -871,7 +976,7 @@ public sealed class MainViewModel : ViewModelBase
     {
         if (SelectedScreen != AppScreen.Home) return;
 
-        var games = GamesView.Cast<GameTileViewModel>().ToList();
+        var games = GetHomeCarouselGames();
         if (games.Count < 2) return;
 
         int index = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
@@ -1221,6 +1326,18 @@ public sealed class MainViewModel : ViewModelBase
 
         game.SetCustomBackgroundPath(null);
         _ = RefreshHomeBackgroundAsync();
+    }
+
+    /// <summary>Flips one game's membership in the curated Home carousel list (Settings > Artwork > Home
+    /// Carousel) — only visible/relevant while HomeShowAllGames is off.</summary>
+    private void ToggleGameHomeVisibility(GameTileViewModel? game)
+    {
+        if (game is null) return;
+
+        bool include = !game.IncludeInHomeCarousel;
+        _db.UpdateIncludeInHomeCarousel(game.Id, include);
+        game.SetIncludeInHomeCarousel(include);
+        RefreshHomeCarouselSlots();
     }
 
     /// <summary>Program Files (and x86) — present on every Windows install, so these seed the scan-directory

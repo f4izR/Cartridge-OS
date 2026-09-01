@@ -9,11 +9,33 @@
         mc:Ignorable="d"
         Title="Cartridge OS"
         Icon="Assets/app-icon.png"
-        WindowStyle="None"
-        WindowState="Maximized"
-        ResizeMode="NoResize"
-        Topmost="True"
         Background="{StaticResource BackgroundBrush}">
+
+    <!-- Fullscreen (default) is an always-on-top, chrome-less "console" window — Settings > Display can
+         switch to a normal bordered window at a fixed size instead (MainViewModel.FullscreenEnabled).
+         Local attribute values on Window itself would out-rank these Setters, so the fullscreen defaults
+         live only here now, not as direct attributes above. -->
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="WindowStyle" Value="None" />
+            <Setter Property="ResizeMode" Value="NoResize" />
+            <Setter Property="Topmost" Value="True" />
+            <Setter Property="WindowState" Value="Maximized" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding FullscreenEnabled}" Value="False">
+                    <Setter Property="WindowStyle" Value="SingleBorderWindow" />
+                    <Setter Property="ResizeMode" Value="CanMinimize" />
+                    <Setter Property="Topmost" Value="False" />
+                    <Setter Property="WindowState" Value="Normal" />
+                    <!-- Fixed size, not draggable-resize — WindowedWidth/WindowedHeight in
+                         MainWindow.xaml.cs mirror these two numbers to recenter the window on the
+                         screen when this trigger flips live (Setters here don't retroactively move it). -->
+                    <Setter Property="Width" Value="1280" />
+                    <Setter Property="Height" Value="720" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Style>
 
     <Window.Resources>
         <!-- Small rounded badge for an on-screen controller-button prompt (LB/RB corner tab-switch glyphs,
@@ -63,7 +85,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="KeyBg" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                                <Setter TargetName="KeyBg" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                                 <Setter TargetName="KeyBg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -272,8 +294,8 @@
                             ToolTip="{Binding RunningGameTitle}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                       Foreground="{StaticResource BrandCyanBrush}" VerticalAlignment="Center" />
-                            <TextBlock Text="Resume Game" Foreground="{StaticResource BrandCyanBrush}"
+                                       Foreground="{DynamicResource BrandCyanBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Resume Game" Foreground="{DynamicResource BrandCyanBrush}"
                                        FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
                         </StackPanel>
                     </Border>
@@ -285,8 +307,8 @@
                             Visibility="{Binding IsCursorLocked, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                       Foreground="{StaticResource BrandCyanBrush}" VerticalAlignment="Center" />
-                            <TextBlock Text="CURSOR LOCKED" Foreground="{StaticResource BrandCyanBrush}"
+                                       Foreground="{DynamicResource BrandCyanBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="CURSOR LOCKED" Foreground="{DynamicResource BrandCyanBrush}"
                                        FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
                         </StackPanel>
                     </Border>
@@ -504,7 +526,7 @@
              MainViewModel.ShowUpdateAvailable/UpdateChecker for what populates this. -->
         <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 Margin="0,0,0,20" Padding="16,10" MaxWidth="640"
-                CornerRadius="10" Background="{StaticResource BrandCyanBrush}"
+                CornerRadius="10" Background="{DynamicResource BrandCyanBrush}"
                 Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" FontSize="16"

@@ -17,4 +17,8 @@ public sealed class Game
     /// <summary>User-picked override for this game's own Home background — takes priority over HeroImagePath
     /// when set. Per-game (not a single app-wide wallpaper) so each game can have its own backdrop.</summary>
     public string? CustomBackgroundPath { get; set; }
+
+    /// <summary>Whether this game can appear in the Home carousel when AppSettings.HomeShowAllGames is off
+    /// (a curated subset instead of the whole library). Ignored — every game shows — while that setting is on.</summary>
+    public bool IncludeInHomeCarousel { get; set; } = true;
 }

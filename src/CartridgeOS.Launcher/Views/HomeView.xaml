@@ -121,7 +121,7 @@
                 </DataTrigger>
                 <!-- Cosmetic only — Width/Height/Canvas position are owned by code-behind (see above). -->
                 <DataTrigger Binding="{Binding IsCenter}" Value="True">
-                    <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource BrandCyanBrush}" />
+                    <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                     <Setter TargetName="TitleText" Property="FontSize"
                             Value="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.UiScale, Converter={StaticResource Scale}, ConverterParameter=18}" />
                 </DataTrigger>
@@ -160,7 +160,7 @@
                 <Grid Width="56" Height="56" Margin="0,0,14,0">
                     <Ellipse Width="56" Height="56" Stroke="#26FFFFFF" StrokeThickness="3"
                              Visibility="{Binding IsHomeCarouselAutoCycling, Converter={StaticResource BoolToVisibility}}" />
-                    <Path Width="56" Height="56" Stretch="None" Stroke="{StaticResource BrandCyanBrush}" StrokeThickness="3"
+                    <Path Width="56" Height="56" Stretch="None" Stroke="{DynamicResource BrandCyanBrush}" StrokeThickness="3"
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                           Data="{Binding HomeCarouselProgress, Converter={StaticResource ProgressToArc}, ConverterParameter=56}"
                           Visibility="{Binding IsHomeCarouselAutoCycling, Converter={StaticResource BoolToVisibility}}" />
