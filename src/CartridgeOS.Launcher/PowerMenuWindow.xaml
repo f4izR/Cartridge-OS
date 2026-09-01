@@ -15,22 +15,73 @@
         <StackPanel>
             <TextBlock Text="Power" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,10" />
 
-            <Button Content="Minimize" Command="{Binding MinimizeCommand}"
-                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
-            <Button x:Name="ExitToDesktopButton" Content="Exit to Desktop" Command="{Binding ExitToDesktopCommand}"
-                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
-            <Button Content="Shut Down Cartridge OS" Command="{Binding ShutDownCartridgeOsCommand}"
-                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
-            <Button Content="Restart System" Command="{Binding RestartSystemCommand}"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    Padding="10,8" HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                    Visibility="Collapsed" />
-            <Button Content="Turn Off System" Command="{Binding TurnOffSystemCommand}"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"
-                    Padding="10,8" HorizontalAlignment="Stretch"
-                    Visibility="Collapsed" />
+            <!-- Each item's Tag is its severity color: neutral for actions that don't lose anything
+                 (Minimize), informational for leaving Cartridge OS running in the background (Exit to
+                 Desktop), brand cyan for the primary "close the app" action, and warning/error for the two
+                 real OS-level actions (currently hidden — see RestartSystem/TurnOffSystem below) so they
+                 read as caution/danger the instant they're shown. -->
+            <Button Style="{StaticResource PowerMenuItemStyle}" Command="{Binding MinimizeCommand}"
+                    Tag="{StaticResource TextMutedBrush}" HorizontalAlignment="Stretch" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource MinimizeIconGeometry}" Fill="{StaticResource TextMutedBrush}"
+                          Width="18" Height="18" Stretch="Uniform" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="Minimize" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button x:Name="ExitToDesktopButton" Style="{StaticResource PowerMenuItemStyle}" Command="{Binding ExitToDesktopCommand}"
+                    Tag="{StaticResource InformationBrush}" HorizontalAlignment="Stretch" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource ExitToDesktopIconGeometry}" Fill="{StaticResource InformationBrush}"
+                          Width="18" Height="18" Stretch="Uniform" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="Exit to Desktop" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button Style="{StaticResource PowerMenuItemStyle}" Command="{Binding ShutDownCartridgeOsCommand}"
+                    Tag="{DynamicResource BrandCyanBrush}" HorizontalAlignment="Stretch" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource PowerIconGeometry}" Fill="{DynamicResource BrandCyanBrush}"
+                          Width="18" Height="18" Stretch="Uniform" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="Shut Down Cartridge OS" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button Style="{StaticResource PowerMenuItemStyle}" Command="{Binding RestartSystemCommand}"
+                    Tag="{StaticResource WarningBrush}" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource RestartIconGeometry}" Fill="{StaticResource WarningBrush}"
+                          Width="18" Height="18" Stretch="Uniform" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="Restart System" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <Button Style="{StaticResource PowerMenuItemStyle}" Command="{Binding TurnOffSystemCommand}"
+                    Tag="{StaticResource ErrorBrush}" HorizontalAlignment="Stretch"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource PowerOffIconGeometry}" Fill="{StaticResource ErrorBrush}"
+                          Width="18" Height="18" Stretch="Uniform" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="Turn Off System" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
 
             <TextBlock Foreground="{StaticResource TextMutedBrush}"
                        FontSize="10" Margin="0,12,0,0" HorizontalAlignment="Center" TextWrapping="Wrap">

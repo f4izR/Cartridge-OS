@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- Brand — replaced wholesale by ThemeService.Apply (Settings > Theme) at runtime. Reference these
@@ -60,6 +60,54 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- Power menu icons — Android/Pixel-style glyphs, one per action, so the menu can be scanned by shape
+         alone rather than reading every label (24x24 viewBox Material-style paths). -->
+    <Geometry x:Key="MinimizeIconGeometry">M6,19H18V21H6V19Z</Geometry>
+    <Geometry x:Key="ExitToDesktopIconGeometry">M10.09,15.59L11.5,17L16.5,12L11.5,7L10.09,8.41L12.67,11H3V13H12.67L10.09,15.59M19,3H5C3.89,3 3,3.9 3,5V9H5V5H19V19H5V15H3V19C3,20.1 3.89,21 5,21H19C20.1,21 21,20.1 21,19V5C21,3.9 20.1,3 19,3Z</Geometry>
+    <Geometry x:Key="PowerIconGeometry">M13,3H11V13H13V3M17.83,5.17L16.41,6.58C17.99,7.86 19,9.81 19,12C19,15.87 15.87,19 12,19C8.13,19 5,15.87 5,12C5,9.81 6.01,7.86 7.58,6.58L6.17,5.17C4.23,6.82 3,9.26 3,12C3,16.97 7.03,21 12,21C16.97,21 21,16.97 21,12C21,9.26 19.77,6.82 17.83,5.17Z</Geometry>
+    <Geometry x:Key="RestartIconGeometry">M12,4C14.21,4 16.2,4.9 17.65,6.35L15,9H21V3L18.76,5.24C17,3.5 14.63,2.5 12,2.5C6.85,2.5 2.62,6.28 2,11.16H3.52C4.13,7.13 7.66,4 12,4M18.48,12.84C17.87,16.87 14.34,20 10,20C7.79,20 5.8,19.1 4.35,17.65L7,15H1V21L3.24,18.76C5,20.5 7.37,21.5 10,21.5C15.15,21.5 19.38,17.72 20,12.84H18.48Z</Geometry>
+    <Geometry x:Key="PowerOffIconGeometry">M13,3H11V13H13V3M17.83,5.17L16.41,6.58C17.99,7.86 19,9.81 19,12C19,15.87 15.87,19 12,19C8.13,19 5,15.87 5,12C5,9.81 6.01,7.86 7.58,6.58L6.17,5.17C4.23,6.82 3,9.26 3,12C3,16.97 7.03,21 12,21C16.97,21 21,16.97 21,12C21,9.26 19.77,6.82 17.83,5.17Z</Geometry>
+
+    <!-- Power menu item — icon + label row, colored per action's severity (Tag) rather than one uniform
+         button color, so a safe action (Minimize) and a destructive one (Turn Off System) read differently
+         at a glance while navigating, not just by their text. The colored fill only appears on hover/focus
+         (kept subtle at rest) so the icon tint alone carries the "what is this" signal beforehand, and the
+         fill + border together carry the "this is what I'm about to pick" signal once focused. -->
+    <Style x:Key="PowerMenuItemStyle" TargetType="Button">
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Bg" Background="{StaticResource SurfaceHoverBrush}" CornerRadius="8" />
+                        <Border x:Name="AccentFill" Background="{TemplateBinding Tag}" CornerRadius="8" Opacity="0" />
+                        <Border x:Name="FocusBorder" BorderBrush="{TemplateBinding Tag}" BorderThickness="0" CornerRadius="8" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="AccentFill" Property="Opacity" Value="0.14" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="AccentFill" Property="Opacity" Value="0.26" />
+                        </Trigger>
+                        <!-- The currently D-Pad/keyboard-selected item — colored border + tinted fill (in
+                             the action's own severity color) instead of the old plain cyan ring, so focus
+                             moving across items visibly changes color as it crosses safe/caution/destructive
+                             actions. -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="FocusBorder" Property="BorderThickness" Value="2" />
+                            <Setter TargetName="AccentFill" Property="Opacity" Value="0.20" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Primary button -->

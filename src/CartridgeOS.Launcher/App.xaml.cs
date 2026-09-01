@@ -524,6 +524,15 @@ public partial class App : Application
         game.IsLaunching = true;
         SoundService.PlayConfirm();
 
+        // Fullscreen "launching" splash (PS5 / Steam Big Picture-style) — covers the gap between clicking
+        // launch and the game's own window actually appearing, which can be a couple of seconds of empty
+        // desktop otherwise. Opens with whatever artwork is already decoded (the ~200px tile thumbnail —
+        // soft at fullscreen size but instant), then upgrades to a real fullscreen decode once that's
+        // ready. See DismissLaunchSplashAsync for how/when it closes.
+        var launchSplash = new GameLaunchWindow(game.Title, game.Artwork);
+        launchSplash.Show();
+        if (!string.IsNullOrEmpty(game.ArtworkPath)) _ = LoadHiResLaunchArtworkAsync(launchSplash, game.ArtworkPath);
+
         // Runs before Process.Start, not after — this is what actually updates Recently Played's hero
         // card/order, and it should reflect the moment the user chose to launch, not be at the mercy of
         // whether the OS call below happens to succeed. Previously ran after Process.Start with no
@@ -557,6 +566,7 @@ public partial class App : Application
             // shell-launch timeout. Surfaced via the existing tray balloon (visible even over the
             // fullscreen launcher) since there's no in-window toast mechanism.
             game.IsLaunching = false;
+            launchSplash.Close(); // no fade — nothing actually launched, get out of the way immediately
             _trayIcon?.ShowBalloonTip("Couldn't launch " + game.Title, "The game's executable is missing or you don't have permission to run it.", BalloonIcon.Error);
             return;
         }
@@ -576,6 +586,12 @@ public partial class App : Application
         // Steam/Xbox launches go through steam://, shell:appsFolder\..., and the launcher should still get
         // out of the way for those exactly the same as a direct exe launch.
         _launcherWindow?.Hide();
+
+        // Keeps the splash up until the game's own window actually appears (polling MainWindowHandle,
+        // same signal TryResumeRunningGame/HandleGameProcessExitedAsync use elsewhere), capped at
+        // ShellLaunchIndicatorTimeout either way — for a null Process (Steam/Xbox shell launches) there's
+        // no window to poll for at all, so it just rides out the timeout.
+        _ = DismissLaunchSplashAsync(launchSplash, process, game.ExecutablePath);
 
         // Steam/Xbox launches go through steam://, shell:appsFolder\... — the shell handles those
         // itself and Process.Start returns null, so there's no process to track or overlay for.
@@ -641,6 +657,62 @@ public partial class App : Application
     {
         await Task.Delay(ShellLaunchIndicatorTimeout);
         game.IsLaunching = false;
+    }
+
+    private const int LaunchSplashDecodeWidth = 1920; // fullscreen backdrop, not a tile — same width MainViewModel's Home background uses
+    private static readonly TimeSpan LaunchSplashMinDisplay = TimeSpan.FromSeconds(1.1); // floor so an already-fast-launching game doesn't just flash the splash
+
+    private static async Task LoadHiResLaunchArtworkAsync(GameLaunchWindow splash, string artworkPath)
+    {
+        var hiRes = await ArtworkCache.LoadAsync(artworkPath, LaunchSplashDecodeWidth);
+        if (hiRes is not null) splash.SetArtwork(hiRes);
+    }
+
+    /// <summary>Waits for the launched game's own window to appear (or the process to exit without ever
+    /// showing one, or the timeout to run out — whichever's first), enforces a minimum display time so a
+    /// fast launch doesn't just flash the splash, then fades it out. process is null for Steam/Xbox shell
+    /// launches, which have no window to poll for — those just ride out the timeout.</summary>
+    private async Task DismissLaunchSplashAsync(GameLaunchWindow splash, Process? process, string exePath)
+    {
+        var startedAt = DateTime.UtcNow;
+        string exeName = Path.GetFileNameWithoutExtension(exePath);
+
+        while (DateTime.UtcNow - startedAt < ShellLaunchIndicatorTimeout)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            if (process is null) continue; // nothing to poll — just riding out the timeout below
+
+            try
+            {
+                process.Refresh();
+                if (process.HasExited) break; // crashed or closed before ever showing a window
+            }
+            catch (InvalidOperationException) { break; }
+
+            if (HasVisibleMainWindow(process, exeName)) break;
+        }
+
+        var elapsed = DateTime.UtcNow - startedAt;
+        if (elapsed < LaunchSplashMinDisplay) await Task.Delay(LaunchSplashMinDisplay - elapsed);
+
+        await splash.FadeOutAndCloseAsync();
+    }
+
+    // Same stub/updater-handoff pattern HandleGameProcessExitedAsync accounts for: some games launch via
+    // a thin exe that spawns the real, longer-lived one and exits — so the tracked Process's own
+    // MainWindowHandle can stay zero forever while a same-named sibling process is the one that actually
+    // shows a window.
+    private static bool HasVisibleMainWindow(Process process, string exeName)
+    {
+        try { if (process.MainWindowHandle != IntPtr.Zero) return true; }
+        catch (InvalidOperationException) { }
+
+        foreach (var candidate in Process.GetProcessesByName(exeName))
+        {
+            try { if (candidate.MainWindowHandle != IntPtr.Zero) return true; }
+            catch (InvalidOperationException) { }
+        }
+        return false;
     }
 
     private void OnGameExited()

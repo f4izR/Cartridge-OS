@@ -1,0 +1,53 @@
+<Window x:Class="CartridgeOS.Launcher.GameLaunchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Launching"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        Background="Black"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+    <!-- Covers the whole monitor with the game's own artwork the instant a launch is confirmed (PS5 /
+         Steam Big Picture-style transition) — replaces staring at a suddenly-empty desktop while Windows
+         actually gets the game's process/window up, which can take a couple of seconds on its own before
+         any real loading screen appears. Sized/positioned via MonitorHelper.CoverMonitor in code-behind
+         (same technique OverlayWindow/the screen saver use), not WindowState=Maximized, so it lands on the
+         right monitor in physical pixels regardless of per-monitor DPI. -->
+    <Grid ClipToBounds="True">
+        <!-- RenderTransform origin centered so the slow zoom (started in code-behind's Loaded handler)
+             grows from the middle of the screen rather than drifting toward a corner. -->
+        <Image x:Name="ArtworkImage" Stretch="UniformToFill" RenderTransformOrigin="0.5,0.5">
+            <Image.RenderTransform>
+                <ScaleTransform x:Name="ArtworkScale" ScaleX="1.0" ScaleY="1.0" />
+            </Image.RenderTransform>
+        </Image>
+
+        <!-- Bottom scrim so the title/status text reads over any artwork, bright or dark. -->
+        <Border VerticalAlignment="Bottom" Height="380">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#00000000" Offset="0" />
+                    <GradientStop Color="#E6000000" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,96">
+            <TextBlock x:Name="TitleText" FontSize="38" FontWeight="Bold" Foreground="White"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                       MaxWidth="900" />
+            <!-- Opacity pulse (started in code-behind) is the only "still working on it" signal here — no
+                 spinner glyph, matching the calm PS5/Big Picture feel rather than a busy loading indicator. -->
+            <TextBlock x:Name="StatusText" Text="Launching..." FontSize="17"
+                       Foreground="#BCC1C9" HorizontalAlignment="Center" Margin="0,10,0,0" />
+        </StackPanel>
+
+        <!-- Fades to opaque black (opacity animated in code-behind's FadeOutAndCloseAsync) right before the
+             window closes, so the transition into "minimized to tray" doesn't hard-cut. A plain opaque
+             Border, not Window.Opacity — animating the whole Window needs AllowsTransparency="True", which
+             costs software-rendering fallback for a large maximized window; this stays hardware-accelerated. -->
+        <Border x:Name="FadeOverlay" Background="Black" Opacity="0" IsHitTestVisible="False" />
+    </Grid>
+</Window>
