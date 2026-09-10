@@ -215,6 +215,30 @@
                         <Button Content="+ Add Game" Command="{Binding AddGameCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
 
+                        <TextBlock Text="Add Music App" Style="{StaticResource SettingsActionLabelStyle}" />
+                        <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
+                                   Text="Shown as a quick-launch icon on Home whenever nothing's currently playing (Spotify, etc.) — launching it starts the app minimized in the background and resumes its last playback." />
+                        <ItemsControl ItemsSource="{Binding MusicApps}" Margin="0,6,0,6">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="13" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Remove"
+                                                Command="{Binding DataContext.RemoveMusicAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="+ Add Music App" Command="{Binding AddMusicAppCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+
                         <TextBlock Text="Remove Selected" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="Removes whatever game is currently selected in your library. Only removes it from Cartridge OS — the game itself isn't touched." />

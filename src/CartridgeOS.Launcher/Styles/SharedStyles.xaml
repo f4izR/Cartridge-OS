@@ -11,6 +11,7 @@
     <conv:PercentToPixelWidthConverter x:Key="PercentToPixelWidth" />
     <conv:ScaleConverter x:Key="Scale" />
     <conv:ProgressToArcGeometryConverter x:Key="ProgressToArc" />
+    <conv:PlayPauseGlyphConverter x:Key="PlayPauseGlyph" />
 
     <!-- Implicit (no x:Key) — replaces the default OS scrollbar chrome everywhere in the app (Settings
          panel, Library grid, anywhere else a ScrollViewer shows one) with a thin flat thumb matching the
@@ -191,6 +192,53 @@
                     <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="6">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                     </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Small transparent icon button for the Home "Now Playing" widget's prev/play-pause/next controls —
+         same flat hover-highlight treatment as WindowControlButtonBase's other users (Minimize/Close), on
+         this app's own brushes rather than one-off colors. -->
+    <Style x:Key="MediaControlButtonStyle" TargetType="Button" BasedOn="{StaticResource WindowControlButtonBase}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Margin" Value="2,0" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Home "quick launch" music app tile (see HomeView.xaml's music row) — rounded square icon button.
+         BorderBrush is TemplateBound rather than hardcoded so the per-item DataTemplate can set Button's
+         own BorderBrush directly from a DataTrigger to draw a gamepad-selection ring, the same way
+         HomeCarouselItemTemplate's "IsCenter" trigger colors its Tile border. -->
+    <Style x:Key="MusicAppTileButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="52" />
+        <Setter Property="Height" Value="52" />
+        <Setter Property="Margin" Value="0,0,10,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{StaticResource SurfaceRaisedBrush}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

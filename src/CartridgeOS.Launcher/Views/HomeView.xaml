@@ -3,9 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
              mc:Ignorable="d">
 
     <UserControl.Resources>
+        <conv:EqualsMultiConverter x:Key="EqualsMultiConverter" />
         <!-- Home carousel tile: plain DataTemplate over MainViewModel.HomeCarouselSlots, not a
              ListBoxItem/Selector style — center-vs-side sizing is driven directly by HomeCarouselSlot.IsCenter
              via the DataTriggers below, with no dependency on Selector.IsSelected or a ScrollViewer at all. -->
@@ -186,6 +188,98 @@
              which is what kept breaking. Canvas (not a StackPanel) since tiles are absolutely positioned
              by offset-from-center, not left-to-right document flow — see HomeView.xaml.cs for the layout
              math; 1750x430 = (2*HomeCarouselSideCount+1) slots * 250px pitch, tallest (center) tile height. -->
+        <!-- Now Playing: OS-wide media transport controls (Spotify, a browser tab, anything reporting a
+             System Media Transport Controls session — see Services/MediaSessionService), tucked into the
+             empty space to the right of the carousel row. Hidden entirely when nothing is playing. Themed
+             off the same brushes as the rest of the app (StatusPillStyle's card look) rather than its own
+             one-off colors, so it doesn't read as a bolted-on overlay. -->
+        <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="12,10"
+                Visibility="{Binding MediaSession.HasSession, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Grid Width="36" Height="36" Margin="0,0,10,0">
+                        <TextBlock Text="🎵" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <Image Source="{Binding MediaSession.AppIcon}" Width="32" Height="32" />
+                    </Grid>
+                    <StackPanel VerticalAlignment="Center" MaxWidth="180" Margin="0,0,14,0">
+                        <TextBlock Text="{Binding MediaSession.Title}" Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding MediaSession.Artist}" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="⏮" Command="{Binding MediaPreviousCommand}" Style="{StaticResource MediaControlButtonStyle}" />
+                        <Button Command="{Binding MediaPlayPauseCommand}" Style="{StaticResource MediaControlButtonStyle}">
+                            <TextBlock Text="{Binding MediaSession.IsPlaying, Converter={StaticResource PlayPauseGlyph}}"
+                                       Foreground="{DynamicResource BrandCyanBrush}" FontWeight="Bold" />
+                        </Button>
+                        <Button Content="⏭" Command="{Binding MediaNextCommand}" Style="{StaticResource MediaControlButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
+                <!-- D-Pad Up/Down are otherwise idle on Home (only Left/Right drive the carousel — see
+                     MainWindow.HandleGamepadAction), so they're repurposed here for play/pause and skip
+                     next rather than adding a whole new focus-navigation path for one small widget. -->
+                <TextBlock Margin="0,8,0,0" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center">
+                    <Run Text="▲" FontWeight="Bold" /><Run Text=" Play/Pause   " />
+                    <Run Text="▼" FontWeight="Bold" /><Run Text=" Next" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- Music Apps: "quick launch" icons for apps added in Settings > Home > Music Apps (see
+             MainViewModel.MusicApps), shown in the same spot as Now Playing above whenever nothing's
+             currently playing — this is how the user gets music going in the first place. -->
+        <StackPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Visibility="{Binding MediaSession.HasSession, Converter={StaticResource InverseBoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <ItemsControl ItemsSource="{Binding MusicApps}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button x:Name="AppButton" ToolTip="{Binding Name}"
+                                    Command="{Binding DataContext.LaunchMusicAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource MusicAppTileButtonStyle}">
+                                <Grid Width="40" Height="40">
+                                    <TextBlock Text="🎵" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <Image Source="{Binding Icon}" Width="34" Height="34" />
+                                </Grid>
+                            </Button>
+                            <DataTemplate.Triggers>
+                                <!-- Gamepad-selection ring — see MainWindow.HandleGamepadAction's Home
+                                     Up/Down handling, which drives MainViewModel.SelectedMusicApp. -->
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource EqualsMultiConverter}">
+                                            <Binding />
+                                            <Binding Path="DataContext.SelectedMusicApp" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter TargetName="AppButton" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Always present (even with zero apps added yet) — this is the discoverable entry point
+                     into Settings > Home > Music Apps the feature needs, not just a manage-list there. -->
+                <Button Content="+" FontSize="20" FontWeight="Bold" ToolTip="Add a music app"
+                        Command="{Binding AddMusicAppCommand}" Style="{StaticResource MusicAppTileButtonStyle}" />
+            </StackPanel>
+            <TextBlock Margin="0,8,0,0" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center">
+                <Run Text="▲▼" FontWeight="Bold" /><Run Text=" Select   " />
+                <Run Text="A" FontWeight="Bold" /><Run Text=" Launch" />
+            </TextBlock>
+        </StackPanel>
+
         <ItemsControl Grid.Row="1"
                       ItemsSource="{Binding HomeCarouselSlots}"
                       ItemTemplate="{StaticResource HomeCarouselItemTemplate}"

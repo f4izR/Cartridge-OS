@@ -318,9 +318,38 @@ public partial class MainWindow : Window
             if (newIndex != index) SoundService.PlayNavigate();
             vm.SelectedGame = homeGames[newIndex];
             vm.ResetHomeCarouselTimer();
+            _homeMusicRowFocused = false; // Left/Right hands Confirm back to "launch the selected game"
+        }
+        // D-Pad Up/Down are otherwise idle on Home (the carousel above only reacts to Left/Right) — reused
+        // here for the Now Playing widget (see HomeView.xaml) instead of building out a whole separate
+        // focus-navigation path for one small widget's three buttons.
+        else if (vm.SelectedScreen == AppScreen.Home && vm.MediaSession.HasSession &&
+                 action is GamepadAction.NavigateUp or GamepadAction.NavigateDown)
+        {
+            if (action == GamepadAction.NavigateUp) vm.MediaPlayPauseCommand.Execute(null);
+            else vm.MediaNextCommand.Execute(null);
+        }
+        // Same idle-D-Pad reuse as above, for the music-apps row (HomeView.xaml) that replaces Now Playing
+        // when nothing's playing — Up/Down cycles the gamepad-highlighted app, Confirm launches it (see
+        // _homeMusicRowFocused below, which is what tells Confirm "launch this instead of the selected game").
+        else if (vm.SelectedScreen == AppScreen.Home && !vm.MediaSession.HasSession && vm.MusicApps.Count > 0 &&
+                 action is GamepadAction.NavigateUp or GamepadAction.NavigateDown)
+        {
+            _homeMusicRowFocused = true;
+            int index = vm.SelectedMusicApp is null ? 0 : vm.MusicApps.IndexOf(vm.SelectedMusicApp);
+            if (index < 0) index = 0;
+            int step = action == GamepadAction.NavigateUp ? -1 : 1;
+            vm.SelectedMusicApp = vm.MusicApps[(index + step + vm.MusicApps.Count) % vm.MusicApps.Count];
+            SoundService.PlayNavigate();
         }
 
-        if (action == GamepadAction.Confirm) LaunchSelected(vm, vm.SelectedGame);
+        if (action == GamepadAction.Confirm)
+        {
+            if (_homeMusicRowFocused && vm.SelectedScreen == AppScreen.Home && !vm.MediaSession.HasSession && vm.SelectedMusicApp is { } musicApp)
+                vm.LaunchMusicAppCommand.Execute(musicApp);
+            else
+                LaunchSelected(vm, vm.SelectedGame);
+        }
         if (action == GamepadAction.Secondary && vm.AddGameCommand.CanExecute(null)) vm.AddGameCommand.Execute(null);
         // Library-only: the tile's ContextMenu (Change Wallpaper / Delete Game) is only ever attached to
         // Library's ListBoxItem style (LibraryView.xaml's GameTileStyle) — Home's carousel and Recently
@@ -488,6 +517,12 @@ public partial class MainWindow : Window
     // or gamepad) since it gates right here, at the one place both funnel through.
     private static readonly TimeSpan HomeCarouselNavThrottle = TimeSpan.FromMilliseconds(220);
     private DateTime _lastHomeCarouselNavAt = DateTime.MinValue;
+
+    /// <summary>True once D-Pad Up/Down has been used to highlight a music-apps-row tile (see
+    /// HandleGamepadAction's Home block) — tells Confirm to launch that app instead of the carousel's
+    /// selected game. Reset by Left/Right (which hands Confirm back to the carousel) — stale otherwise has
+    /// no effect since Confirm's check also requires Home + no active media session + a highlighted app.</summary>
+    private bool _homeMusicRowFocused;
 
     /// <summary>Opens the selected tile's context menu (Change Wallpaper / Delete Game) — the gamepad Menu/Options
     /// equivalent of right-clicking a tile (Xbox "Menu"/hamburger button, PS "Options" button). Effectively only

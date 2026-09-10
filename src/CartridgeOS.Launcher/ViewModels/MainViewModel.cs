@@ -45,6 +45,7 @@ public sealed class MainViewModel : ViewModelBase
 
     private readonly GameDatabase _db;
     private readonly AppSettings _settings = SettingsStore.Load();
+    public MediaSessionService MediaSession { get; } = new();
     private readonly DispatcherTimer _rescanTimer;
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _connectivityTimer;
@@ -797,6 +798,25 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand DismissUpdateCommand { get; }
     public ICommand UseDefaultSteamGridDbApiKeyCommand { get; }
     public ICommand UseDefaultTheGamesDbApiKeyCommand { get; }
+    public ICommand MediaPlayPauseCommand { get; }
+    public ICommand MediaNextCommand { get; }
+    public ICommand MediaPreviousCommand { get; }
+    public ICommand AddMusicAppCommand { get; }
+    public ICommand RemoveMusicAppCommand { get; }
+    public ICommand LaunchMusicAppCommand { get; }
+
+    /// <summary>"Quick launch" music apps (Settings > Home > Music Apps), shown on Home as launchable
+    /// icons whenever MediaSession.HasSession is false — see HomeView.xaml's music row.</summary>
+    public ObservableCollection<MusicAppViewModel> MusicApps { get; } = [];
+
+    private MusicAppViewModel? _selectedMusicApp;
+    /// <summary>Which music-row icon is gamepad-highlighted — see MainWindow.HandleGamepadAction's
+    /// Home Up/Down handling. Mouse users just click a tile directly and never touch this.</summary>
+    public MusicAppViewModel? SelectedMusicApp
+    {
+        get => _selectedMusicApp;
+        set => SetProperty(ref _selectedMusicApp, value);
+    }
 
     /// <summary>Puts a message on the on-screen error toast, auto-dismissed after a few seconds (or
     /// immediately via DismissErrorCommand). The only user-visible surface for a failure that isn't
@@ -881,6 +901,16 @@ public sealed class MainViewModel : ViewModelBase
         ClearScreenSaverMusicCommand = new RelayCommand(() => ScreenSaverMusicFolder = null);
         UseDefaultSteamGridDbApiKeyCommand = new RelayCommand(() => SteamGridDbApiKeyOverride = null);
         UseDefaultTheGamesDbApiKeyCommand = new RelayCommand(() => TheGamesDbApiKeyOverride = null);
+        MediaPlayPauseCommand = new RelayCommand(MediaSession.TogglePlayPause);
+        MediaNextCommand = new RelayCommand(MediaSession.Next);
+        MediaPreviousCommand = new RelayCommand(MediaSession.Previous);
+        _ = MediaSession.InitializeAsync();
+
+        foreach (var entry in _settings.MusicApps) MusicApps.Add(new MusicAppViewModel(entry));
+        SelectedMusicApp = MusicApps.FirstOrDefault();
+        AddMusicAppCommand = new RelayCommand(AddMusicApp);
+        RemoveMusicAppCommand = new RelayCommand<MusicAppViewModel>(RemoveMusicApp);
+        LaunchMusicAppCommand = new RelayCommand<MusicAppViewModel>(LaunchMusicApp);
 
         GamesView = CollectionViewSource.GetDefaultView(Games);
         GamesView.Filter = FilterGame;
@@ -1164,6 +1194,54 @@ public sealed class MainViewModel : ViewModelBase
         var tile = new GameTileViewModel(game);
         Games.Add(tile);
         SelectedGame = tile;
+    }
+
+    private void AddMusicApp()
+    {
+        var dialog = new OpenFileDialog { Title = "Select music app executable", Filter = "Executable (*.exe)|*.exe" };
+        if (dialog.ShowDialog() != true) return;
+
+        var entry = new MusicAppEntry { Name = Path.GetFileNameWithoutExtension(dialog.FileName), ExecutablePath = dialog.FileName };
+        _settings.MusicApps.Add(entry);
+        SettingsStore.Save(_settings);
+
+        var app = new MusicAppViewModel(entry);
+        MusicApps.Add(app);
+        SelectedMusicApp ??= app;
+    }
+
+    private void RemoveMusicApp(MusicAppViewModel? app)
+    {
+        if (app is null) return;
+        _settings.MusicApps.Remove(app.Entry);
+        SettingsStore.Save(_settings);
+        MusicApps.Remove(app);
+        if (ReferenceEquals(SelectedMusicApp, app)) SelectedMusicApp = MusicApps.FirstOrDefault();
+    }
+
+    // Launched minimized (not brought to the foreground) — this is meant to start music playing behind
+    // the launcher, not take over the screen the way a game does (see MainWindow.LaunchSelected).
+    private void LaunchMusicApp(MusicAppViewModel? app)
+    {
+        if (app is null) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(app.ExecutablePath)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(app.ExecutablePath),
+                WindowStyle = ProcessWindowStyle.Minimized,
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Couldn't launch \"{app.Name}\" — {ex.Message}");
+            return;
+        }
+
+        // Most desktop players resume wherever they left off once told to Play — see
+        // MediaSessionService.ResumePlaybackForAsync's own comment for why this is a poll, not an event.
+        _ = MediaSession.ResumePlaybackForAsync(app.ExecutablePath);
     }
 
     private void RemoveGame()

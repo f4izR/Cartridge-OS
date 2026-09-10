@@ -47,4 +47,14 @@ public sealed class AppSettings
     /// the shared bundled key being rate-limited/abused switch to their own, see ArtworkFetcher.</summary>
     public string? SteamGridDbApiKeyOverride { get; set; }
     public string? TheGamesDbApiKeyOverride { get; set; }
+
+    /// <summary>User-added "quick launch" music apps (Spotify, etc.) — shown on Home as launchable icons
+    /// whenever nothing is currently playing, see MainViewModel.MusicApps and HomeView.xaml's music row.</summary>
+    public List<MusicAppEntry> MusicApps { get; set; } = [];
+}
+
+public sealed class MusicAppEntry
+{
+    public required string Name { get; set; }
+    public required string ExecutablePath { get; set; }
 }
