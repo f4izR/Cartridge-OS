@@ -189,7 +189,7 @@
         <ItemsControl Grid.Row="1"
                       ItemsSource="{Binding HomeCarouselSlots}"
                       ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
-                      HorizontalAlignment="Center">
+                      HorizontalAlignment="Left">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <!-- Sized off MainViewModel.HomeCarouselCanvasWidth/Height (scaled by UiScale) rather than

@@ -387,10 +387,10 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
-    // How many tiles show on each side of the center one — 3+3+1 = 7 visible. Bump this for a wider
-    // carousel; RefreshHomeCarouselSlots automatically shrinks it for a library smaller than that.
+    // How many tiles trail the hero (selected) tile to the right — hero + 6 = 7 visible. Bump this for a
+    // wider shelf; RefreshHomeCarouselSlots automatically shrinks it for a library smaller than that.
     // internal: HomeView.xaml.cs mirrors this to size its Canvas — keep the two in sync.
-    internal const int HomeCarouselSideCount = 3;
+    internal const int HomeCarouselSideCount = 6;
 
     /// <summary>
     /// The Home carousel's visible tiles — center slot is the selected game, the rest wrap around it
@@ -437,12 +437,15 @@ public sealed class MainViewModel : ViewModelBase
         int centerIndex = SelectedGame is null ? 0 : games.IndexOf(SelectedGame);
         if (centerIndex < 0) centerIndex = 0;
 
-        int side = Math.Min(HomeCarouselSideCount, (games.Count - 1) / 2); // don't show the same game twice when the library is small
+        int side = Math.Min(HomeCarouselSideCount, games.Count - 1); // don't show the same game twice when the library is small
 
         var existingByGame = HomeCarouselSlots.ToDictionary(s => s.Game);
         var target = new HashSet<GameTileViewModel>();
 
-        for (int offset = -side; offset <= side; offset++)
+        // Xbox-style shelf: the selected game is the leftmost (offset 0), oversized "hero" tile, with the
+        // rest of the library trailing to the right in play order — not centered with symmetric before/after
+        // neighbors like the old PS5-style carousel.
+        for (int offset = 0; offset <= side; offset++)
         {
             int index = ((centerIndex + offset) % games.Count + games.Count) % games.Count;
             var game = games[index];
@@ -675,18 +678,21 @@ public sealed class MainViewModel : ViewModelBase
 
     // Same story as the Library tile sizes above — HomeView's carousel (HomeView.xaml.cs's ApplyOffset)
     // reads all its pixel dimensions from here instead of owning its own constants, so both screens scale
-    // off one shared source of truth.
-    public const double BaseHomeCenterWidth = 260, BaseHomeCenterHeight = 410;
-    public const double BaseHomeSideWidth = 190, BaseHomeSideHeight = 300;
-    public const double BaseHomeSlotPitch = 250;
+    // off one shared source of truth. Pure box-art ratio (~2:3, no caption row under the tile anymore —
+    // see HomeView.xaml) now that the shelf has no per-tile title text, matching the reference layout.
+    public const double BaseHomeCenterWidth = 260, BaseHomeCenterHeight = 390;
+    public const double BaseHomeSideWidth = 170, BaseHomeSideHeight = 255;
+    public const double BaseHomeSlotPitch = 190;
 
     public double HomeCenterWidth => Math.Round(BaseHomeCenterWidth * UiScale);
     public double HomeCenterHeight => Math.Round(BaseHomeCenterHeight * UiScale);
     public double HomeSideWidth => Math.Round(BaseHomeSideWidth * UiScale);
     public double HomeSideHeight => Math.Round(BaseHomeSideHeight * UiScale);
     public double HomeSlotPitch => Math.Round(BaseHomeSlotPitch * UiScale);
-    /// <summary>Matches the Canvas size in HomeView.xaml — (2*HomeCarouselSideCount+1) slots wide at the current pitch.</summary>
-    public double HomeCarouselCanvasWidth => (2 * HomeCarouselSideCount + 1) * HomeSlotPitch;
+    /// <summary>Matches the Canvas size in HomeView.xaml — the wider hero tile plus the trailing side
+    /// shelf at the current pitch (hero + side count * pitch), left-anchored. See HomeView.xaml.cs's
+    /// ApplyOffset for the matching per-tile left-position math.</summary>
+    public double HomeCarouselCanvasWidth => HomeCenterWidth + HomeCarouselSideCount * HomeSlotPitch;
     public double HomeCarouselCanvasHeight => HomeCenterHeight;
 
     /// <summary>Re-derives <see cref="UiScale"/> from an actual window width — see MainWindow's SizeChanged hook.</summary>

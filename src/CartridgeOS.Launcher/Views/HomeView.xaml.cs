@@ -76,7 +76,12 @@ public partial class HomeView : UserControl
         bool isCenter = offset == 0;
         double width = isCenter ? vm.HomeCenterWidth : vm.HomeSideWidth;
         double height = isCenter ? vm.HomeCenterHeight : vm.HomeSideHeight;
-        double left = vm.HomeCarouselCanvasWidth / 2 + offset * vm.HomeSlotPitch - width / 2;
+        // Left-anchored shelf (Xbox-style): MainViewModel.RefreshHomeCarouselSlots now emits offsets
+        // 0..side only (hero leftmost, rest trailing right), not the old symmetric -side..side — so tiles
+        // are positioned by pitch-from-left rather than centered around the canvas midpoint. The hero tile
+        // is wider than one pitch, so side tiles start after its full width, not at offset*pitch (which
+        // undershot and overlapped the hero with the first side tile).
+        double left = offset == 0 ? 0 : vm.HomeCenterWidth + (offset - 1) * vm.HomeSlotPitch + (vm.HomeSlotPitch - vm.HomeSideWidth);
         double top = vm.HomeCenterHeight - height; // bottom-aligned: tiles grow upward from a shared baseline
 
         if (!animate)
