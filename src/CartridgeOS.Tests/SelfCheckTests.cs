@@ -39,4 +39,7 @@ public class SelfCheckTests
 
     [Fact]
     public void Xbox() => Assert.True(XboxScannerSelfCheck.Run());
+
+    [Fact]
+    public void AnimatedImage() => Assert.True(AnimatedImageSelfCheck.Run());
 }

@@ -1,4 +1,6 @@
 {
   "version": "1.2.0",
-  "releaseUrl": "https://github.com/f4izR/Cartridge-OS/releases/latest"
+  "releaseUrl": "https://github.com/f4izR/Cartridge-OS/releases/latest",
+  "downloadUrl": "https://github.com/f4izR/Cartridge-OS/releases/latest/download/CartridgeOS-Setup.exe",
+  "sha256": ""
 }

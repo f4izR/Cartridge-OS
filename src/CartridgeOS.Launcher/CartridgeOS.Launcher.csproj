@@ -7,6 +7,12 @@
   <ItemGroup>
     <PackageReference Include="VirtualizingWrapPanel" Version="2.5.4" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <!-- Animated WebP hero backgrounds (Controls/AnimatedImage) — WPF/WIC has no built-in WebP decoder at
+         all (animated or otherwise), so this is the actual decoder; also used for GIF frame decoding
+         instead of WPF's own GifBitmapDecoder, since Skia's codec composites disposal-method frames
+         correctly where a naive raw-frame swap doesn't. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.4" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,6 +42,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Source of truth for UpdateChecker's version comparison and the installer's AppVersion
          (installer/CartridgeOS.iss) — bump both together on release. -->
     <Version>1.2.0</Version>

@@ -92,9 +92,16 @@ physical hardware (see `context.md`'s "no real UI automation here" limitation).
 | Enter / Space | Confirm |
 | Insert | Secondary (Add Game) |
 | Apps (context-menu key) | Menu |
-| Escape | Back |
+| Escape | Back (closes Settings/Search if either is open); opens the Power menu otherwise — see note below |
 | Tab | Toggle Settings |
 | F4 | Power (opens/closes the power menu) |
+
+**2026-09-17: Escape also opens the Power menu at the top level.** Previously a dead key with nothing
+open (Back had nothing to close). Handled directly in `MainWindow`'s `PreviewKeyDown`, deliberately
+*not* routed through `GamepadAction.Back` — that enum value is shared with the controller's B/Circle
+button, and B doing nothing at the top level is the existing, correct console-dashboard convention; only
+the keyboard's Esc gained the new behavior, B is unchanged. Settings/Search/an open context menu still
+take priority (Esc keeps closing those first, same as before).
 
 **Deliberately no keyboard shortcut for Toggle Search** — the search box is opened by clicking its
 icon (mouse) or the X/Square button (gamepad) only.

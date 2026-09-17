@@ -23,9 +23,6 @@ namespace CartridgeOS.Launcher;
 /// </summary>
 public partial class MainWindow : Window
 {
-    // Home's background is crisp/unblurred now (no dimming) — full opacity crossfade.
-    private const double BackgroundArtOpacity = 1.0;
-
     // Must match the Width/Height Setters on Window.Style's FullscreenEnabled=False DataTrigger (see
     // MainWindow.xaml) — that Style sizes the window, CenterAsWindowed below only positions it.
     private const double WindowedWidth = 1280;
@@ -51,19 +48,24 @@ public partial class MainWindow : Window
         var vm = new MainViewModel();
         DataContext = vm;
 
-        // New artwork swaps in instantly (the Image binding just changes Source); fade it back in
-        // for a soft crossfade feel instead of a hard cut, PS5-menu style.
+        // New background art swaps in instantly (the Image/AnimatedImage binding just changes Source); fade
+        // it back in for a soft crossfade feel instead of a hard cut, PS5-menu style. Reinstated after being
+        // pulled for feeling laggy — that lag was the blurred layer re-rendering live on every animated
+        // frame (see MainWindow.xaml's BackgroundArtBlurred), not this animation; now that the blur is a
+        // one-shot bake instead of a live effect, the actual cost here is just three cheap opacity ramps.
         vm.PropertyChanged += (_, e) =>
         {
-            (FrameworkElement? target, double opacity) = e.PropertyName switch
+            FrameworkElement? target = e.PropertyName switch
             {
-                // HomeBackgroundImage, not SelectedGame — the redecoded/hero background loads asynchronously
+                // HomeBackgroundImage/HomeBackgroundBlurredImage, not SelectedGame — both load asynchronously
                 // a beat after SelectedGame itself changes, so fading on SelectedGame would fire too early
                 // (against whatever the still-old Source was) and miss the swap this animation is meant for.
-                nameof(MainViewModel.HomeBackgroundImage) => (BackgroundArt, BackgroundArtOpacity),
-                _ => (null, 0),
+                nameof(MainViewModel.HomeBackgroundImage) => BackgroundArt,
+                nameof(MainViewModel.HomeBackgroundBlurredImage) => BackgroundArtBlurred,
+                nameof(MainViewModel.HomeAnimatedBackgroundPath) => AnimatedBackgroundArt,
+                _ => null,
             };
-            target?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, opacity, TimeSpan.FromMilliseconds(250)));
+            target?.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)));
         };
 
         // Window.Style's DataTrigger (see MainWindow.xaml) already swaps WindowState/Width/Height when this
@@ -107,26 +109,6 @@ public partial class MainWindow : Window
             vm.StopStatusUpdates();
         };
 
-        // Topmost="True" (XAML) keeps this window above every other non-topmost window regardless of
-        // which one actually has focus — that's the whole point for the console-dashboard look, but it
-        // means alt-tabbing to (or clicking the taskbar icon for) an ordinary app like Chrome left that
-        // app's window rendering *behind* this one, with no visible way to actually reach it (reported by
-        // user testing). Minimizing on Deactivated fixes that the same way launching a game already does
-        // (see App.LaunchGame) — a minimized Topmost window doesn't render, so whatever the user just
-        // switched to becomes visible. Guarded to same-process only: this window also "deactivates" when
-        // one of its own child dialogs (PowerMenuWindow, ArtworkCropWindow, ScanResultsWindow) opens, and
-        // minimizing out from under an owned dialog would be exactly the wrong thing to do there.
-        Deactivated += (_, _) =>
-        {
-            // Only relevant to the fullscreen/topmost look — a normal windowed instance (Settings >
-            // Display) isn't fighting anything for foreground space, so it should behave like any other
-            // window and just sit there when it loses focus, not auto-minimize on every alt-tab away.
-            if (!vm.FullscreenEnabled) return;
-            if (WindowState == WindowState.Minimized) return;
-            if (IsForegroundWindowInThisProcess()) return;
-            WindowState = WindowState.Minimized;
-        };
-
         // Win+Shift+Left/Right (Windows' move-to-other-monitor shortcut) relocates a WindowState=Maximized
         // WPF window but doesn't resize it to fill the new monitor — a long-standing WPF bug — leaving it
         // stuck at the old monitor's size/position (reported by user: "can't shift it to the other
@@ -150,6 +132,20 @@ public partial class MainWindow : Window
             // movement and Escape/Enter entirely for anyone typing. Confirmed live: typing "abcdef" then
             // pressing Left three times then "XYZ" produced "abcdefXYZ" instead of "abcXYZdef".
             if (Keyboard.FocusedElement is TextBox) return;
+
+            // Esc opens the Power menu at the top level — keyboard-only, deliberately not routed through
+            // GamepadAction.Back (which Escape also maps to below, for closing Settings/Search): that enum
+            // value is shared with the controller's B/Circle button, and B doing nothing at the top level
+            // is the existing, correct console-dashboard convention — this shouldn't also remap B just
+            // because Esc happens to share the same "back" meaning while something IS open. Settings/Search
+            // still take priority so Esc keeps closing those first, same as it already did.
+            var vm = (MainViewModel)DataContext;
+            if (e.Key == Key.Escape && !vm.IsSettingsOpen && !vm.IsSearchOpen && _openGameContextMenu is null)
+            {
+                OpenPowerMenu();
+                e.Handled = true;
+                return;
+            }
 
             GamepadAction? action = e.Key switch
             {
@@ -575,7 +571,7 @@ public partial class MainWindow : Window
 
     private void ResumeGame_Click(object sender, MouseButtonEventArgs e) => ((App)Application.Current).TryResumeRunningGame();
 
-    public void ShowUpdateAvailable(string version, string releaseUrl) => ((MainViewModel)DataContext).ShowUpdateAvailable(version, releaseUrl);
+    public void ShowUpdateAvailable(UpdateChecker.UpdateInfo update) => ((MainViewModel)DataContext).ShowUpdateAvailable(update);
 
     private PowerMenuWindow? _powerMenuWindow;
 
@@ -624,7 +620,12 @@ public partial class MainWindow : Window
     /// case this exists for.</summary>
     internal static void LaunchSelected(MainViewModel vm, GameTileViewModel? game)
     {
-        if (vm.IsGameRunning) { ((App)Application.Current).TryResumeRunningGame(); return; }
+        // TryResumeRunningGame self-heals (clears the stale running-game state) when it finds nothing to
+        // resume, so vm.IsGameRunning can go from true to false as a result of this call — don't treat a
+        // failed resume as "nothing more to do here" the way this used to, or a genuinely-exited game
+        // (confirmed live: one that failed to open and was closed) leaves every further launch attempt
+        // silently refused forever, with no way back in short of restarting the whole app.
+        if (vm.IsGameRunning && ((App)Application.Current).TryResumeRunningGame()) return;
 
         if (game is null) return;
         ((App)Application.Current).LaunchGame(vm, game);

@@ -280,18 +280,45 @@
             </TextBlock>
         </StackPanel>
 
-        <ItemsControl Grid.Row="1"
-                      ItemsSource="{Binding HomeCarouselSlots}"
-                      ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
-                      HorizontalAlignment="Left">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <!-- Sized off MainViewModel.HomeCarouselCanvasWidth/Height (scaled by UiScale) rather than
-                         the old fixed 1750x430 — must stay in lockstep with HomeView.xaml.cs's ApplyOffset,
-                         which positions tiles using those same view-model dimensions. -->
-                    <Canvas Width="{Binding HomeCarouselCanvasWidth}" Height="{Binding HomeCarouselCanvasHeight}" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-        </ItemsControl>
+        <StackPanel Grid.Row="1" HorizontalAlignment="Left">
+            <!-- "12 / 45" — where the selection sits in the whole eligible library, not just the 7 tiles
+                 currently on the shelf (MainViewModel.HomeCarouselPositionLabel; see the peek slot below for
+                 the other half of this — reported live: the fixed-size shelf gave no sense the library was
+                 any bigger than exactly what's visible). -->
+            <TextBlock Text="{Binding HomeCarouselPositionLabel}" Foreground="#9CD7E9FF" FontSize="13"
+                       FontWeight="SemiBold" Margin="4,0,0,8" />
+            <ItemsControl ItemsSource="{Binding HomeCarouselSlots}"
+                          ItemTemplate="{StaticResource HomeCarouselItemTemplate}"
+                          HorizontalAlignment="Left">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <!-- Sized off MainViewModel.HomeCarouselCanvasWidth/Height (scaled by UiScale) rather
+                             than the old fixed 1750x430 — must stay in lockstep with HomeView.xaml.cs's
+                             ApplyOffset, which positions tiles using those same view-model dimensions.
+                             ClipToBounds crops the peek tile (see HomeCarouselCanvasWidth's own doc comment)
+                             to just the sliver HomeCarouselCanvasWidth actually leaves room for, instead of
+                             rendering it in full past the shelf's normal edge — Canvas doesn't clip its
+                             children by default. MainViewModel.BaseHomeCarouselPeekReveal now shows most of
+                             that tile (reported live as too drastic a cut when only a small sliver showed),
+                             so the OpacityMask below only needs to soften the small remaining trim at the very
+                             edge — a wide fade zone here would instead dim a good chunk of an otherwise-fully-
+                             visible tile for no reason, undoing the point of showing more of it. Applied
+                             unconditionally (not just while a peek tile exists) so the last real tile's own
+                             edge also just gently recedes rather than ending on a hard line when there's
+                             nothing to peek at. -->
+                        <Canvas Width="{Binding HomeCarouselCanvasWidth}" Height="{Binding HomeCarouselCanvasHeight}"
+                                ClipToBounds="True">
+                            <Canvas.OpacityMask>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="White" Offset="0" />
+                                    <GradientStop Color="White" Offset="0.96" />
+                                    <GradientStop Color="Transparent" Offset="1" />
+                                </LinearGradientBrush>
+                            </Canvas.OpacityMask>
+                        </Canvas>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
     </Grid>
 </UserControl>

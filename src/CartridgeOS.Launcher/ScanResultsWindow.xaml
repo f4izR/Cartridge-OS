@@ -68,9 +68,12 @@
             </StackPanel>
 
             <Grid Grid.Row="5">
+                <!-- Hidden (not just overlaid) while a rescan is in progress — previously the old results
+                     stayed fully visible underneath the "Scanning..." label, which read as "did picking a
+                     new folder even do anything?" rather than "this is what's about to be replaced." -->
                 <ListBox ItemsSource="{Binding Candidates}" ItemContainerStyle="{StaticResource ThemedListBoxItemStyle}"
                          Background="{StaticResource SurfaceBrush}" BorderThickness="1" BorderBrush="{StaticResource BorderBrush}"
-                         Padding="6">
+                         Padding="6" Visibility="{Binding IsScanning, Converter={StaticResource InverseBoolToVisibility}}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
@@ -84,8 +87,11 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <TextBlock Text="Scanning..." HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextMutedBrush}" Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Scanning..." HorizontalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
             </Grid>
 
             <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

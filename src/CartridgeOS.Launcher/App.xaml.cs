@@ -40,6 +40,7 @@ public partial class App : Application
         ["--self-check-ipc"] = PipeIpcSelfCheck.Run,
         ["--self-check-mouse-emulation"] = MouseEmulationSelfCheck.Run,
         ["--self-check-xbox"] = XboxScannerSelfCheck.Run,
+        ["--self-check-animated-image"] = AnimatedImageSelfCheck.Run,
     };
 
     private Mutex? _singleInstanceMutex;
@@ -187,7 +188,7 @@ public partial class App : Application
         if (update is null) return;
 
         _pendingUpdate = update;
-        _ = Dispatcher.BeginInvoke(() => _launcherWindow?.ShowUpdateAvailable(update.Version, update.ReleaseUrl));
+        _ = Dispatcher.BeginInvoke(() => _launcherWindow?.ShowUpdateAvailable(update));
     }
 
     private PipeResponse HandleSingleInstanceSignal(PipeRequest request)
@@ -269,7 +270,13 @@ public partial class App : Application
     }
 
     /// <summary>Ticks every 1s (see OnStartup) — suppressed entirely while the screen saver is already
-    /// showing, a game is running, or some other modal (e.g. ArtworkCropWindow) has gamepad focus.
+    /// showing, a game is running, some other modal (e.g. ArtworkCropWindow) has gamepad focus, or the
+    /// launcher window itself isn't actually on screen. That last one matters: closing to tray (or a
+    /// running game hiding it — see LaunchGame) is supposed to mean "out of the way entirely," but
+    /// IdleDetector.GetIdleTime() below is a system-wide "any keyboard/mouse/gamepad input" check with no
+    /// idea whether the launcher is even open — without this guard, sitting idle at the desktop (or in
+    /// another app) with Cartridge OS minimized to tray would still pop the Topmost, fullscreen screen
+    /// saver up over whatever the user was actually doing.
     /// Reloads AppSettings fresh every tick rather than caching a copy — it's a tiny JSON file, and this
     /// sidesteps needing any change-notification plumbing between the Settings UI (which edits its own
     /// MainViewModel-owned AppSettings instance) and this class.</summary>
@@ -280,6 +287,11 @@ public partial class App : Application
         if (_screenSaverWindows.Count > 0) return;
         if (_runningGameProcess is not null) return;
         if (_modalGamepadTarget is not null) return;
+        // WPF's IsVisible stays true for a minimized window (it only tracks Hide()/Show(), not on-screen
+        // state), so WindowState needs its own check — the Power menu's Minimize option is the other way
+        // the launcher can be "open" but not actually visible to the user.
+        if (_launcherWindow is not { IsVisible: true } window) return;
+        if (window.WindowState == WindowState.Minimized) return;
 
         var threshold = TimeSpan.FromMinutes(settings.ScreenSaverInactivityMinutes);
         bool idle = IdleDetector.GetIdleTime() >= threshold && DateTime.UtcNow - _lastGamepadActivityUtc >= threshold;
@@ -361,7 +373,7 @@ public partial class App : Application
             _launcherWindow.Closed += (_, _) => OnLauncherClosed();
             this.MainWindow = _launcherWindow; // Application.MainWindow — qualified to disambiguate from the MainWindow type
 
-            if (_pendingUpdate is { } update) _launcherWindow.ShowUpdateAvailable(update.Version, update.ReleaseUrl);
+            if (_pendingUpdate is { } update) _launcherWindow.ShowUpdateAvailable(update);
         }
 
         // Un-minimizes it back to whatever look Settings > Display currently has it set to — the
@@ -455,7 +467,20 @@ public partial class App : Application
 
         // Same stub-then-real-process situation HandleGameProcessExitedAsync guards against: the tracked
         // Process can be the short-lived launcher stub (already exited, or never had a window of its own)
-        // while the actual game runs under a different PID with the same exe name.
+        // while the actual game runs under a different PID — and usually a different exe name too, so
+        // check the whole process tree rooted at the original PID, not just same-named processes.
+        if (handle == IntPtr.Zero)
+        {
+            foreach (int pid in ProcessTree.GetTreePids(_runningGameProcess.Id))
+            {
+                try
+                {
+                    var candidate = Process.GetProcessById(pid);
+                    if (candidate.MainWindowHandle != IntPtr.Zero) { handle = candidate.MainWindowHandle; break; }
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { }
+            }
+        }
         if (handle == IntPtr.Zero && !string.IsNullOrEmpty(_runningGameExePath))
         {
             string exeName = Path.GetFileNameWithoutExtension(_runningGameExePath);
@@ -469,7 +494,17 @@ public partial class App : Application
             }
         }
 
-        if (handle == IntPtr.Zero) return false;
+        if (handle == IntPtr.Zero)
+        {
+            // No window anywhere for the tracked game — it's actually gone and our own tracking just
+            // never caught it (confirmed live: happens when a game fails to open and gets closed before
+            // HandleGameProcessExitedAsync's own watch resolves). Self-heal instead of leaving
+            // _runningGameProcess set forever: MainWindow.LaunchSelected calls this exact method whenever
+            // vm.IsGameRunning is true, so if this returns false without clearing state, the app is stuck
+            // believing a game is running and refuses every further launch attempt.
+            OnGameExited();
+            return false;
+        }
 
         if (IsIconic(handle)) ShowWindow(handle, SwRestore);
         SetForegroundWindow(handle);
@@ -490,10 +525,16 @@ public partial class App : Application
         }
 
         // The tracked Process can be a stub/updater that already exited while the real, longer-lived
-        // game process kept running under the same exe name (see HandleGameProcessExitedAsync) — in that
-        // case _runningGameProcess.Kill() above throws InvalidOperationException and does nothing, so
-        // "Quit Game" silently fails to actually close the game (confirmed live with Plants vs Zombies).
-        // Same exeName heuristic as the stub-detection code, applied here to actually kill the real process.
+        // game process kept running (see HandleGameProcessExitedAsync) — in that case
+        // _runningGameProcess.Kill() above throws InvalidOperationException and does nothing, so "Quit
+        // Game" silently fails to actually close the game (confirmed live with Plants vs Zombies). Kill
+        // every PID still in the launch's process tree, plus the same exeName fallback for anything that
+        // got detached from the tree (elevated relaunch, scheduled task).
+        foreach (int pid in ProcessTree.GetTreePids(_runningGameProcess?.Id ?? 0))
+        {
+            try { Process.GetProcessById(pid).Kill(); }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or ArgumentException) { }
+        }
         if (!string.IsNullOrEmpty(_runningGameExePath))
         {
             string exeName = Path.GetFileNameWithoutExtension(_runningGameExePath);
@@ -613,7 +654,7 @@ public partial class App : Application
         try
         {
             process.EnableRaisingEvents = true;
-            process.Exited += (_, _) => _ = HandleGameProcessExitedAsync(vm, game, startedAtUtc);
+            process.Exited += (_, _) => _ = HandleGameProcessExitedAsync(vm, game, startedAtUtc, process.Id);
         }
         catch (InvalidOperationException)
         {
@@ -621,26 +662,59 @@ public partial class App : Application
         }
     }
 
-    private static readonly TimeSpan RestarterRecheckDelay = TimeSpan.FromSeconds(2);
+    // Fast rechecks for the first 12s (the common stub-relaunch case resolves almost immediately), then
+    // slower indefinite rechecks after that — see the comment on the loop below for why this never just
+    // gives up.
+    private static readonly TimeSpan RestarterFastRecheckWindow = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan RestarterFastRecheckInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan RestarterSlowRecheckInterval = TimeSpan.FromSeconds(5);
 
-    // Some apps (a fair few Electron/Squirrel-installed ones — Trello, Discord, Slack, VS Code — plus
-    // some games, confirmed live with CS2) launch via a thin stub/updater .exe that spawns the real,
-    // longer-lived process and then exits itself within a second or two — so *our* tracked
-    // Process.Exited fires almost immediately even though the app the user actually cares about is
-    // still very much open. Left unguarded, that made the screen saver ignore a genuinely-still-running
-    // app and, worse, brought the launcher window back (OnGameExited -> ShowLauncher) right on top of
-    // the game for a moment before the real process took the foreground back — the "minimizes then
-    // instantly maximizes" glitch. Heuristic fix: if another process sharing the same exe name is
-    // alive, treat this as the stub exiting, not the app. The immediate check alone still raced the
-    // replacement process starting, so this rechecks once more after a short delay before giving up.
-    private async Task HandleGameProcessExitedAsync(MainViewModel vm, GameTileViewModel game, DateTime startedAtUtc)
+    // Most games launch via a thin stub/updater/launcher .exe that spawns the real, longer-lived
+    // process and then exits itself — so *our* tracked Process.Exited fires almost immediately even
+    // though the game the user actually cares about is still very much open. Left unguarded, that made
+    // the screen saver ignore a genuinely-still-running game and, worse, brought the launcher window
+    // back (OnGameExited -> ShowLauncher) right on top of the game — the "minimizes then instantly
+    // maximizes" glitch, and it also silently killed playtime tracking for that session.
+    //
+    // The replacement process is very often a *different* exe entirely (Unreal's "-Win64-Shipping.exe",
+    // Unity's own build name, EA/Ubisoft/Battle.net wrapper handoffs) — same-exe-name matching only
+    // catches the minority of cases (Electron-style self-relaunches) where the name doesn't change. A
+    // process's OS-level parent chain still points back to the stub's PID regardless of what the child
+    // is named, so ProcessTree checks that instead: is rootPid, or anything descended from it, still
+    // alive. Exe-name is kept as a second, independent signal in case the real game got detached from
+    // the tree entirely (spawned via a scheduled task or an elevated relaunch, which breaks parent-PID
+    // ancestry) — either signal being true is enough to keep the session alive.
+    private async Task HandleGameProcessExitedAsync(MainViewModel vm, GameTileViewModel game, DateTime startedAtUtc, int launchedPid)
     {
         string exeName = Path.GetFileNameWithoutExtension(game.ExecutablePath);
-        if (Process.GetProcessesByName(exeName).Length > 0) return;
+        bool StillRunning() => ProcessTree.IsTreeAlive(launchedPid) || Process.GetProcessesByName(exeName).Length > 0;
 
-        await Task.Delay(RestarterRecheckDelay);
-        if (Process.GetProcessesByName(exeName).Length > 0) return; // ponytail: fixed recheck delay, not a full process-tree watch — good enough to dodge the restart race
+        var fastDeadline = DateTime.UtcNow + RestarterFastRecheckWindow;
+        while (DateTime.UtcNow < fastDeadline)
+        {
+            if (!StillRunning()) { await FinishGameExitAsync(vm, game, startedAtUtc); return; }
+            await Task.Delay(RestarterFastRecheckInterval);
+        }
 
+        // Past the fast window, keep rechecking indefinitely instead of giving up — abandoning the watch
+        // here used to leave the app permanently believing a game was still running whenever StillRunning
+        // returned a wrong "yes" even once (a real risk: ProcessTree.IsTreeAlive keys purely on PID, and
+        // Windows can reuse a PID for an unrelated process soon after the real one exits). Confirmed live:
+        // a game that failed to open and was then closed left the launcher stuck showing "Resume Game"
+        // forever, unable to launch anything else — MainWindow.LaunchSelected trusted IsGameRunning and
+        // never got a chance to re-verify because this watcher had already stopped checking. The
+        // _runningGameProcess guard below stops this loop on its own once something else (Quit Game, or
+        // the self-heal LaunchSelected now does when a resume attempt finds nothing) has already cleared
+        // the state — no double bookkeeping once that happens.
+        while (_runningGameProcess is not null)
+        {
+            if (!StillRunning()) { await FinishGameExitAsync(vm, game, startedAtUtc); return; }
+            await Task.Delay(RestarterSlowRecheckInterval);
+        }
+    }
+
+    private async Task FinishGameExitAsync(MainViewModel vm, GameTileViewModel game, DateTime startedAtUtc)
+    {
         await Dispatcher.BeginInvoke(() =>
         {
             // Rounded up, with a 1-minute floor — a real session (however short) should always show

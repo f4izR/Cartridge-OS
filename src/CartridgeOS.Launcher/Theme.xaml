@@ -144,6 +144,15 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource BrandCyanBrush}" />
                         </Trigger>
+                        <!-- Busy-state buttons (Scan for Games/Find More Games/update Download — anywhere
+                             a click kicks off async work) relied on nothing but their Content text changing
+                             ("Scanning...") to show something was happening, with the button itself looking
+                             completely unchanged otherwise — easy to miss (reported live: "no response back
+                             like did something happen"). Dimming on IsEnabled=False gives every such button
+                             real visual weight for free, without each caller needing its own busy chrome. -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.55" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

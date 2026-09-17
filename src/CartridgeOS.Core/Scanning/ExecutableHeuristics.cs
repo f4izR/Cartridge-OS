@@ -54,27 +54,33 @@ public static class ExecutableHeuristics
     /// ponytail: "biggest non-installer exe in the top-level folder" is crude but a commonly
     /// effective heuristic for the main game binary. Revisit if real installs show it picking wrong.
     /// </remarks>
-    public static string? FindLikelyGameExecutable(string installDir)
-    {
-        if (!Directory.Exists(installDir)) return null;
+    public static string? FindLikelyGameExecutable(string installDir) =>
+        FindLikelyGameExecutables(installDir).FirstOrDefault();
 
-        List<string> candidates;
+    /// <summary>Every plausible game exe directly inside a folder, biggest first — not just the single best
+    /// guess FindLikelyGameExecutable returns. A per-game install folder only ever has one real answer, but
+    /// a folder the user points the scanner at directly isn't guaranteed to have that shape — it can just as
+    /// easily be a flat folder of several unrelated loose exes with no per-game subfolder structure at all
+    /// (confirmed live: a test folder with 7 loose exes only ever surfaced 1 game under the single-guess
+    /// version). See StandaloneExecutableScanner for how single- vs multi-result folders are titled
+    /// differently.</summary>
+    public static List<string> FindLikelyGameExecutables(string installDir)
+    {
+        if (!Directory.Exists(installDir)) return [];
+
+        // Same UnauthorizedAccessException/IOException tolerance as the single-result version used to have
+        // inline — a real filesystem walk (especially StandaloneExecutableScanner.ScanRecursive, which
+        // calls this on every folder it visits) hits plenty of folders the current user can't read.
         try
         {
-            candidates = Directory.EnumerateFiles(installDir, "*.exe", SearchOption.TopDirectoryOnly)
+            return Directory.EnumerateFiles(installDir, "*.exe", SearchOption.TopDirectoryOnly)
                 .Where(f => !IgnoredNamePrefixes.Any(p => Path.GetFileName(f).StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(f => new FileInfo(f).Length)
                 .ToList();
         }
-        // A real filesystem walk (especially StandaloneExecutableScanner.ScanRecursive, which calls this on
-        // every folder it visits) hits plenty of folders the current user can't read — service data dirs,
-        // other users' profiles, etc. Not finding an exe there is the correct answer, not a crash.
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            return null;
+            return [];
         }
-
-        return candidates.Count == 0
-            ? null
-            : candidates.OrderByDescending(f => new FileInfo(f).Length).First();
     }
 }

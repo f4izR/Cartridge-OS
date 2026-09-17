@@ -29,6 +29,45 @@ public static class StandaloneScannerSelfCheck
             if (results[0].Title != "My Cool Game") return false;
             if (Path.GetFileName(results[0].ExecutablePath) != "MyCoolGame.exe") return false;
 
+            // Regression check: the user picks a directory via Browse... that IS the game's own folder
+            // (exe sitting directly inside it), not a Program-Files-style container of per-game
+            // subfolders — reported live (an exe placed directly in a picked folder found nothing).
+            string directHitRoot = Path.Combine(Path.GetTempPath(), $"cartridgeos-selfcheck-{Guid.NewGuid():N}", "Bogus EXE");
+            Directory.CreateDirectory(directHitRoot);
+            try
+            {
+                File.WriteAllBytes(Path.Combine(directHitRoot, "BogusGame.exe"), new byte[20_000_000]);
+                var directHitResults = new StandaloneExecutableScanner().Scan([directHitRoot]);
+                if (directHitResults.Count != 1) return false;
+                if (directHitResults[0].Title != "Bogus EXE") return false;
+                if (Path.GetFileName(directHitResults[0].ExecutablePath) != "BogusGame.exe") return false;
+            }
+            finally
+            {
+                Directory.Delete(Path.GetDirectoryName(directHitRoot)!, recursive: true);
+            }
+
+            // Regression check: a folder of several loose exes with no per-game subfolder structure at all
+            // (e.g. a handful of games' exes dumped straight into one folder) — reported live, only 1 of 3
+            // ever showed up before this, since the single-best-guess heuristic discarded the other 2.
+            string multiExeRoot = Path.Combine(Path.GetTempPath(), $"cartridgeos-selfcheck-{Guid.NewGuid():N}", "Loose Exes");
+            Directory.CreateDirectory(multiExeRoot);
+            try
+            {
+                File.WriteAllBytes(Path.Combine(multiExeRoot, "First_Game.exe"), new byte[30_000_000]);
+                File.WriteAllBytes(Path.Combine(multiExeRoot, "Second Game.exe"), new byte[20_000_000]);
+                File.WriteAllBytes(Path.Combine(multiExeRoot, "unins000.exe"), new byte[1_000_000]); // ignored prefix, must still be filtered out
+                var multiExeResults = new StandaloneExecutableScanner().Scan([multiExeRoot]);
+
+                if (multiExeResults.Count != 2) return false;
+                if (!multiExeResults.Any(g => g.Title == "First Game" && Path.GetFileName(g.ExecutablePath) == "First_Game.exe")) return false;
+                if (!multiExeResults.Any(g => g.Title == "Second Game" && Path.GetFileName(g.ExecutablePath) == "Second Game.exe")) return false;
+            }
+            finally
+            {
+                Directory.Delete(Path.GetDirectoryName(multiExeRoot)!, recursive: true);
+            }
+
             return true;
         }
         finally

@@ -6,26 +6,30 @@
         xmlns:local="clr-namespace:CartridgeOS.Launcher"
         xmlns:conv="clr-namespace:CartridgeOS.Launcher.Converters"
         xmlns:views="clr-namespace:CartridgeOS.Launcher.Views"
+        xmlns:controls="clr-namespace:CartridgeOS.Launcher.Controls"
         mc:Ignorable="d"
         Title="Cartridge OS"
         Icon="Assets/app-icon.png"
         Background="{StaticResource BackgroundBrush}">
 
-    <!-- Fullscreen (default) is an always-on-top, chrome-less "console" window — Settings > Display can
-         switch to a normal bordered window at a fixed size instead (MainViewModel.FullscreenEnabled).
-         Local attribute values on Window itself would out-rank these Setters, so the fullscreen defaults
-         live only here now, not as direct attributes above. -->
+    <!-- Fullscreen (default) is a chrome-less "console" window — Settings > Display can switch to a
+         normal bordered window at a fixed size instead (MainViewModel.FullscreenEnabled). Deliberately
+         NOT Topmost: an always-on-top launcher rendered over every other app the moment it lost focus
+         (alt-tabbing to Chrome, or any other normal window, left it stuck behind this one with no way to
+         reach it — reported by user testing) and, worse, popping back from Hide() after a launch (see
+         App.LaunchGame) could reassert itself above the game that was supposedly already running. A plain
+         Maximized window behaves like any other app: normal z-order, normal alt-tab. Local attribute
+         values on Window itself would out-rank these Setters, so the fullscreen defaults live only here
+         now, not as direct attributes above. -->
     <Window.Style>
         <Style TargetType="Window">
             <Setter Property="WindowStyle" Value="None" />
             <Setter Property="ResizeMode" Value="NoResize" />
-            <Setter Property="Topmost" Value="True" />
             <Setter Property="WindowState" Value="Maximized" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding FullscreenEnabled}" Value="False">
                     <Setter Property="WindowStyle" Value="SingleBorderWindow" />
                     <Setter Property="ResizeMode" Value="CanMinimize" />
-                    <Setter Property="Topmost" Value="False" />
                     <Setter Property="WindowState" Value="Normal" />
                     <!-- Fixed size, not draggable-resize — WindowedWidth/WindowedHeight in
                          MainWindow.xaml.cs mirror these two numbers to recenter the window on the
@@ -172,18 +176,48 @@
         </Grid.ColumnDefinitions>
 
         <!-- Home only: crisp, unblurred selected-game artwork (or its per-game custom background override) —
-             the one screen where the background follows selection. UniformToFill crops-to-fill rather than
-             distorting, so the art fills this rectangular frame without stretching regardless of its own
-             aspect ratio. -->
+             the one screen where the background follows selection. Stretch mode follows the source's own
+             shape (MainViewModel.HomeBackgroundStretch): a landscape hero/wallpaper banner letterboxes
+             (Uniform) rather than being cropped to cover the whole frame, which used to throw away most of
+             its width (reported live as "the background is getting cropped"); the portrait boxart fallback
+             keeps cropping-to-fill (UniformToFill), which reads as "zoomed into the cover art" rather than
+             pillarboxed tiny in the middle of the screen. -->
         <Grid Grid.ColumnSpan="2" IsHitTestVisible="False"
               Visibility="{Binding IsHomeScreen, Converter={StaticResource BoolToVisibility}}">
-            <!-- HomeBackgroundImage, not SelectedGame.Artwork: that's the ~200px tile thumbnail, badly
-                 pixelated when stretched full-screen — this is redecoded at 1920px (custom background,
-                 SteamGridDB hero image, or boxart, in that priority — see RefreshHomeBackgroundAsync)
-                 specifically for this. -->
-            <Image x:Name="BackgroundArt"
-                   Source="{Binding HomeBackgroundImage}"
-                   Stretch="UniformToFill" />
+            <!-- Blurred fill — MainViewModel.HomeBackgroundBlurredImage, a one-shot Skia blur baked into a
+                 plain static bitmap, not a live effect. An earlier version used a VisualBrush sampling
+                 HeroContent live through a WPF BlurEffect, which re-rendered on every frame of an animated
+                 background (~30fps) and was confirmed as the actual cause of switching feeling sluggish —
+                 this costs the same as drawing any other static image, refreshed only when the selection
+                 changes. Only actually visible where the letterboxed layer below doesn't reach (the top/
+                 bottom bars a landscape banner leaves on a taller screen; the portrait boxart fallback
+                 already covers 100% of this frame on its own, so this sits fully hidden behind it). -->
+            <Image x:Name="BackgroundArtBlurred" Source="{Binding HomeBackgroundBlurredImage}" Stretch="UniformToFill" />
+            <Grid x:Name="HeroContent">
+                <!-- HomeBackgroundImage, not SelectedGame.Artwork: that's the ~200px tile thumbnail, badly
+                     pixelated when stretched full-screen — this is redecoded at 1920px (custom background,
+                     SteamGridDB hero image, or boxart, in that priority — see RefreshHomeBackgroundAsync)
+                     specifically for this. -->
+                <!-- HighQuality bitmap scaling on both layers below — SteamGridDB hero art (animated ones
+                     especially: every animated hero on the whole site tops out around 1920x620, a ~3:1 banner,
+                     since they're converted from ~1080p "live wallpaper" video sources, not a Cartridge-OS-side
+                     limit) is a wide, short strip stretched to cover a much taller full-screen area, which
+                     needs real upscaling, not just cropping. WPF's default scaling mode is cheap/soft; Fant
+                     resampling costs nothing (no new dependency, no fetch/decode change) and measurably reduces
+                     the resulting blur — reported live as "low res". Doesn't fix the underlying resolution
+                     ceiling, just stops making it worse than it has to be. -->
+                <Image x:Name="BackgroundArt"
+                       Source="{Binding HomeBackgroundImage}"
+                       Stretch="{Binding HomeBackgroundStretch}"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+                <!-- Layered on top: plays instead of the static frame above whenever the resolved background is
+                     an animated hero (see MainViewModel.HomeAnimatedBackgroundPath) — shows nothing (letting the
+                     static Image above show through) otherwise, or if the file fails to parse. -->
+                <controls:AnimatedImage x:Name="AnimatedBackgroundArt"
+                                         SourcePath="{Binding HomeAnimatedBackgroundPath}"
+                                         Stretch="{Binding HomeBackgroundStretch}"
+                                         RenderOptions.BitmapScalingMode="HighQuality" />
+            </Grid>
             <!-- Bottom-up fade so the carousel/details text over it stays legible regardless of what the art
                  looks like there — there's no blur to fall back on for that here. Starts higher and reaches
                  near-opaque (not just semi-transparent) at the bottom, since a bright/light piece of test
@@ -521,6 +555,26 @@
             </StackPanel>
         </Border>
 
+        <!-- Status toast — same top-center slot/z-order as the error toast above, offset below it so the
+             two can never overlap even if somehow both were showing at once. Neutral color (not the error
+             toast's red) — "here's what happened" rather than "something went wrong". See
+             MainViewModel.ShowStatus for what populates this (currently just Scan for Games/Find More
+             Games — see those commands for why this exists: neither gave any feedback on click before). -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,70,0,0" Padding="16,10" MaxWidth="640"
+                CornerRadius="10" Background="{StaticResource SuccessBrush}"
+                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                           Foreground="Black" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding StatusMessage}" Foreground="Black" FontSize="13"
+                           TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="520" />
+                <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" Command="{Binding DismissStatusCommand}"
+                        Style="{StaticResource WindowControlButtonBase}" Foreground="Black"
+                        Width="24" Height="24" Margin="10,0,0,0" ToolTip="Dismiss" />
+            </StackPanel>
+        </Border>
+
         <!-- Update-available banner — bottom-center, so it never competes with the error toast's slot
              above. Persistent (no auto-dismiss timer) until the user clicks it or dismisses it; see
              MainViewModel.ShowUpdateAvailable/UpdateChecker for what populates this. -->
@@ -533,8 +587,20 @@
                            Foreground="Black" VerticalAlignment="Center" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding UpdateAvailableMessage}" Foreground="Black" FontSize="13"
                            TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="420" />
-                <Button Content="Download" Command="{Binding OpenUpdateCommand}"
-                        Margin="14,0,0,0" Padding="10,4" />
+                <Button Command="{Binding OpenUpdateCommand}" Margin="14,0,0,0" Padding="10,4">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Content" Value="Download" />
+                            <Setter Property="IsEnabled" Value="True" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDownloadingUpdate}" Value="True">
+                                    <Setter Property="Content" Value="Downloading..." />
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" Command="{Binding DismissUpdateCommand}"
                         Style="{StaticResource WindowControlButtonBase}" Foreground="Black"
                         Width="24" Height="24" Margin="10,0,0,0" ToolTip="Dismiss" />

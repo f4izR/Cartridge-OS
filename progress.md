@@ -101,6 +101,7 @@ Fullscreen launcher with controller nav, keyboard/mouse fallback, manual add-gam
 ## Phase checklist (from plan)
 
 ### To-dos (small, deliberately deferred)
+- [ ] **[HIGHEST PRIORITY]** Real theme engine (load/merge on-disk XAML resource dictionaries per theme, not just the built-in accent-color presets `ThemeService.Apply` already does) — see the 2026-09-16 Playnite comparison discussion for scope: manifest format, Settings picker, and decoupling view XAML enough for a theme to restyle layout, not just colors. Marketplace/distribution explicitly out of scope until there's an actual theme-author audience.
 - [x] ~~Multi-monitor clamping for right-stick mouse emulation~~ — done 2026-08-18, see log.
 - [ ] TheGamesDB title matching (`ArtworkFetcher.FindTheGamesDbUrlAsync`) takes the first search result with no disambiguation — can resolve to the wrong regional/platform/remaster variant for titles with multiple DB entries
 - [ ] True two-image crossfade for the selected-game background art (`MainWindow.xaml`'s `BackgroundArt`) — currently a single-image fade-in on selection change, not old-fades-out-while-new-fades-in; revisit if it reads as a hard cut in practice

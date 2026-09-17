@@ -35,6 +35,15 @@ public static class ArtworkFetcher
     private const string SteamGridDbSource = "SteamGridDB";
     private const string TheGamesDbSource = "TheGamesDB";
 
+    // The two animated formats SteamGridDB actually serves for hero art — see FetchHeroAndCacheAsync. Any
+    // other mime (static jpg/png, or a format not covered here) falls back to the plain ".jpg" cache path,
+    // same as before animated heroes existed.
+    private static readonly Dictionary<string, string> AnimatedExtensionsByMime = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/gif"] = "gif",
+        ["image/webp"] = "webp",
+    };
+
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     // Every caller fires fetches fire-and-forget in a loop (startup load, post-scan import) with no
@@ -110,14 +119,26 @@ public static class ArtworkFetcher
     /// purpose-built for exactly this (landscape, ~3:1), unlike the portrait boxart ArtworkPath points to.
     /// SteamGridDB-only (no TheGamesDB fallback here) — fetched lazily per-game by the caller, not eagerly
     /// for the whole library, so this alone doesn't multiply request volume the way boxart fetching would.
+    ///
+    /// Prefers an animated hero (SteamGridDB's types=animated,static — see FetchSteamGridDbHeroUrlAsync)
+    /// when one exists, caching it with a .gif or .webp extension instead of .jpg so callers (and
+    /// Controls/AnimatedImage, which decodes both via SkiaSharp — WPF/WIC has no built-in decoder for
+    /// either, animated or not) can tell what they got just from the path.
     /// </summary>
     public static async Task<string?> FetchHeroAndCacheAsync(Game game)
     {
-        string cachePath = Path.Combine(CacheDir, $"{Sanitize(game.Title)}_{game.Id}_hero.jpg");
-        if (File.Exists(cachePath))
+        // The extension isn't known until the response comes back (animated vs static, and which animated
+        // format), so every possible cache path is checked up front — whichever exists already wins, no
+        // network round trip needed.
+        string cacheBasePath = Path.Combine(CacheDir, $"{Sanitize(game.Title)}_{game.Id}_hero");
+        foreach (string candidateExt in AnimatedExtensionsByMime.Values.Append("jpg"))
         {
-            Log($"{game.Title}: hero already cached at {cachePath}");
-            return cachePath;
+            string existing = $"{cacheBasePath}.{candidateExt}";
+            if (File.Exists(existing))
+            {
+                Log($"{game.Title}: hero already cached at {existing}");
+                return existing;
+            }
         }
 
         if (!RateLimiter.IsAvailable(SteamGridDbSource))
@@ -127,19 +148,19 @@ public static class ArtworkFetcher
         }
 
         string sgdbKey = EffectiveSteamGridDbApiKey(SettingsStore.Load());
-        string? url;
+        (string Url, string? Mime)? hero;
         try
         {
             // Steam games can be looked up directly by their real appid — skips the fuzzy title-search step
             // entirely and is more reliable than it for anything with an ambiguous or common title.
             if (TryGetSteamAppId(game.ExecutablePath, out string appId))
             {
-                url = await FetchSteamGridDbHeroUrlAsync($"steam/{appId}", game.Title, sgdbKey);
+                hero = await FetchSteamGridDbHeroUrlAsync($"steam/{appId}", game.Title, sgdbKey);
             }
             else
             {
                 int? gameId = await FindSteamGridDbGameIdAsync(game.Title, sgdbKey);
-                url = gameId is null ? null : await FetchSteamGridDbHeroUrlAsync($"game/{gameId}", game.Title, sgdbKey);
+                hero = gameId is null ? null : await FetchSteamGridDbHeroUrlAsync($"game/{gameId}", game.Title, sgdbKey);
             }
         }
         catch (HttpRequestException ex)
@@ -148,12 +169,16 @@ public static class ArtworkFetcher
             return null;
         }
 
-        if (url is null) return null;
+        if (hero is not { } resolved) return null;
 
-        Log($"{game.Title}: downloading hero {url}");
+        string ext = resolved.Mime is not null && AnimatedExtensionsByMime.TryGetValue(resolved.Mime, out string? animatedExt)
+            ? animatedExt : "jpg";
+        string cachePath = $"{cacheBasePath}.{ext}";
+
+        Log($"{game.Title}: downloading hero {resolved.Url}");
         try
         {
-            byte[] bytes = await Http.GetByteArrayAsync(url);
+            byte[] bytes = await Http.GetByteArrayAsync(resolved.Url);
             Directory.CreateDirectory(CacheDir);
             await File.WriteAllBytesAsync(cachePath, bytes);
             Log($"{game.Title}: hero saved to {cachePath} ({bytes.Length} bytes)");
@@ -166,10 +191,10 @@ public static class ArtworkFetcher
         }
     }
 
-    private static async Task<string?> FetchSteamGridDbHeroUrlAsync(string platformPath, string title, string apiKey)
+    private static async Task<(string Url, string? Mime)?> FetchSteamGridDbHeroUrlAsync(string platformPath, string title, string apiKey)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
-            $"https://www.steamgriddb.com/api/v2/heroes/{platformPath}?dimensions=1920x620,3840x1240");
+            $"https://www.steamgriddb.com/api/v2/heroes/{platformPath}?dimensions=1920x620,3840x1240&types=animated,static");
         request.Headers.Authorization = new("Bearer", apiKey);
         using var response = await Http.SendAsync(request);
         if (HandleTooManyRequests(response, SteamGridDbSource, title)) return null;
@@ -178,11 +203,21 @@ public static class ArtworkFetcher
             Log($"{title}: SteamGridDB heroes/{platformPath} returned {(int)response.StatusCode} {response.ReasonPhrase}");
             return null;
         }
-        // Same {data:[{url:...}]} shape as the grids response — reused rather than duplicating an identical DTO.
+        // Same {data:[{url:...,mime:...}]} shape as the grids response — reused rather than duplicating an
+        // identical DTO.
         var heroes = await response.Content.ReadFromJsonAsync<SteamGridDbGridsResponse>();
-        string? url = heroes?.Data?.FirstOrDefault()?.Url;
-        if (url is null) Log($"{title}: SteamGridDB matched but has no hero image for {platformPath}");
-        return url;
+        // types=animated,static is a filter, not a sort order — confirmed live against the real API
+        // (Elden Ring's own animated WebP hero came back ranked below several static PNGs). Explicitly
+        // prefer whichever result is actually animated rather than trusting response order, or an
+        // animated hero that exists never gets picked.
+        var picked = heroes?.Data?.FirstOrDefault(g => g.Mime is not null && AnimatedExtensionsByMime.ContainsKey(g.Mime))
+            ?? heroes?.Data?.FirstOrDefault();
+        if (picked?.Url is null)
+        {
+            Log($"{title}: SteamGridDB matched but has no hero image for {platformPath}");
+            return null;
+        }
+        return (picked.Url, picked.Mime);
     }
 
     // ponytail: plain append-to-file log, no rotation — this file stays tiny (one line per game per scan).
@@ -335,9 +370,13 @@ public static class ArtworkFetcher
     /// "artwork cache doesn't grow unbounded" item). No-op for a game whose art was never fetched.</summary>
     public static void PurgeCache(string title, int id)
     {
-        foreach (string suffix in new[] { "", "_hero" })
+        string sanitized = Sanitize(title);
+        var fileNames = new List<string> { $"{sanitized}_{id}.jpg", $"{sanitized}_{id}_hero.jpg" };
+        fileNames.AddRange(AnimatedExtensionsByMime.Values.Select(ext => $"{sanitized}_{id}_hero.{ext}"));
+
+        foreach (string fileName in fileNames)
         {
-            string path = Path.Combine(CacheDir, $"{Sanitize(title)}_{id}{suffix}.jpg");
+            string path = Path.Combine(CacheDir, fileName);
             try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
         }
     }
@@ -392,6 +431,7 @@ public static class ArtworkFetcher
     private sealed class SteamGridDbGrid
     {
         [JsonPropertyName("url")] public string? Url { get; set; }
+        [JsonPropertyName("mime")] public string? Mime { get; set; }
     }
 
     private sealed class TheGamesDbSearchResponse

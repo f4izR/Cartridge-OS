@@ -16,6 +16,7 @@ using CartridgeOS.Core;
 using CartridgeOS.Core.Data;
 using CartridgeOS.Core.Models;
 using CartridgeOS.Core.Scanning;
+using CartridgeOS.Launcher.Controls;
 using CartridgeOS.Launcher.Input;
 using CartridgeOS.Launcher.Services;
 using CommunityToolkit.Mvvm.Input;
@@ -28,6 +29,7 @@ public sealed class MainViewModel : ViewModelBase
     private const int MaxRecentGames = 10;
     private const int MaxScanDirectories = 5; // MRU cap for "Find More Games" scan directories
     private const int BackgroundDecodeWidth = 1920; // full-screen backdrop, not a tile — decode much wider than GameTileViewModel's 200px
+    private const float BackgroundBlurSigma = 40; // Skia Gaussian blur sigma for HomeBackgroundBlurredImage — a one-shot bake, not a live effect, see its own doc comment
     private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(15); // ponytail: hardcoded until there's a settings screen to make it configurable
     private static readonly DateTime ProcessStartTime = Process.GetCurrentProcess().StartTime; // "session" = this app run, not this particular window instance (which can be destroyed/recreated)
 
@@ -88,6 +90,56 @@ public sealed class MainViewModel : ViewModelBase
 
     private int _errorToastToken; // bumped on every new ShowError so an older auto-dismiss can't clear a newer message
 
+    // Same shape as the error toast above, but neutral (not red) — for "here's what happened" rather than
+    // "something went wrong". Added because Scan for Games / Find More Games gave zero feedback on click:
+    // reported live by the user (no indication anything had happened, or was even in progress).
+    private string? _statusMessage;
+    public string? StatusMessage
+    {
+        get => _statusMessage;
+        private set => SetProperty(ref _statusMessage, value);
+    }
+
+    private bool _hasStatusMessage;
+    public bool HasStatusMessage
+    {
+        get => _hasStatusMessage;
+        private set => SetProperty(ref _hasStatusMessage, value);
+    }
+
+    private int _statusToastToken;
+
+    private void ShowStatus(string message)
+    {
+        StatusMessage = message;
+        HasStatusMessage = true;
+        int token = ++_statusToastToken;
+        _ = DismissStatusAfterDelayAsync(token);
+    }
+
+    private async Task DismissStatusAfterDelayAsync(int token)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        if (token == _statusToastToken) HasStatusMessage = false;
+    }
+
+    // Drives the "Scanning..."/"Searching..." button states in SettingsPanel — both scans already ran off
+    // the UI thread before this, but gave no visible sign anything was happening in the meantime, which
+    // read as "did my click even register?" (reported live by the user for both buttons).
+    private bool _isScanningLibrary;
+    public bool IsScanningLibrary
+    {
+        get => _isScanningLibrary;
+        private set => SetProperty(ref _isScanningLibrary, value);
+    }
+
+    private bool _isFindingMoreGames;
+    public bool IsFindingMoreGames
+    {
+        get => _isFindingMoreGames;
+        private set => SetProperty(ref _isFindingMoreGames, value);
+    }
+
     // Update-available banner — separate from the error toast above (persistent until dismissed, not
     // auto-timed, and shouldn't compete for the same on-screen slot). See App.OnStartup/UpdateChecker.
     private string? _updateAvailableMessage;
@@ -104,7 +156,16 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _hasUpdateAvailable, value);
     }
 
-    private string? _updateReleaseUrl;
+    // Disables the Download button and swaps its label while a direct download is in flight, so a slow
+    // connection can't result in the user clicking it repeatedly and launching several installers.
+    private bool _isDownloadingUpdate;
+    public bool IsDownloadingUpdate
+    {
+        get => _isDownloadingUpdate;
+        private set => SetProperty(ref _isDownloadingUpdate, value);
+    }
+
+    private UpdateChecker.UpdateInfo? _updateInfo;
 
     private double _storageUsedPercent;
     /// <summary>Percent used on whichever drive SelectedStorageDrive points at (system drive by default).</summary>
@@ -440,13 +501,29 @@ public sealed class MainViewModel : ViewModelBase
 
         int side = Math.Min(HomeCarouselSideCount, games.Count - 1); // don't show the same game twice when the library is small
 
+        // "12 / 45" position readout — the fixed 7-tile shelf gave no sense that the library is bigger than
+        // what's currently visible (reported live: "feels like there are only seven games"). Also gates the
+        // peek slot below: with a small library (games.Count <= side + 1) every game is already on screen,
+        // so a peek tile would just be a repeat of the hero wrapping around rather than genuinely new content.
+        HomeCarouselPositionLabel = $"{centerIndex + 1} / {games.Count}";
+        bool showPeek = games.Count > side + 1;
+        if (HasHomeCarouselPeek != showPeek)
+        {
+            HasHomeCarouselPeek = showPeek;
+            OnPropertyChanged(nameof(HomeCarouselCanvasWidth));
+        }
+
         var existingByGame = HomeCarouselSlots.ToDictionary(s => s.Game);
         var target = new HashSet<GameTileViewModel>();
 
         // Xbox-style shelf: the selected game is the leftmost (offset 0), oversized "hero" tile, with the
         // rest of the library trailing to the right in play order — not centered with symmetric before/after
-        // neighbors like the old PS5-style carousel.
-        for (int offset = 0; offset <= side; offset++)
+        // neighbors like the old PS5-style carousel. One extra "peek" slot beyond the normal side count when
+        // there's a genuinely different game to show there — HomeCarouselCanvasWidth only reveals a sliver of
+        // it (see its own doc comment), the classic streaming-service "there's more, keep going" cue, rather
+        // than rendering it fully and needing a second, wider viewport just for that one mostly-hidden tile.
+        int lastOffset = showPeek ? side + 1 : side;
+        for (int offset = 0; offset <= lastOffset; offset++)
         {
             int index = ((centerIndex + offset) % games.Count + games.Count) % games.Count;
             var game = games[index];
@@ -690,11 +767,41 @@ public sealed class MainViewModel : ViewModelBase
     public double HomeSideWidth => Math.Round(BaseHomeSideWidth * UiScale);
     public double HomeSideHeight => Math.Round(BaseHomeSideHeight * UiScale);
     public double HomeSlotPitch => Math.Round(BaseHomeSlotPitch * UiScale);
+
+    // How much of the next tile pokes in past the normal shelf edge — most of it (BaseHomeSideWidth is 170),
+    // so it reads as "here's the next game, just trimmed a bit" rather than a thin unrecognizable sliver
+    // (reported live as too drastic a cut at the original, much smaller reveal amount).
+    private const double BaseHomeCarouselPeekReveal = 130;
+    private bool _hasHomeCarouselPeek;
+    /// <summary>Set by RefreshHomeCarouselSlots — true only when the library has a genuinely different game
+    /// beyond the normal shelf window to peek at (a small library where everything's already visible gets
+    /// no peek, since it'd just be the hero repeating via wraparound).</summary>
+    public bool HasHomeCarouselPeek
+    {
+        get => _hasHomeCarouselPeek;
+        private set => SetProperty(ref _hasHomeCarouselPeek, value);
+    }
+
     /// <summary>Matches the Canvas size in HomeView.xaml — the wider hero tile plus the trailing side
-    /// shelf at the current pitch (hero + side count * pitch), left-anchored. See HomeView.xaml.cs's
+    /// shelf at the current pitch (hero + side count * pitch), left-anchored, plus a bit extra when
+    /// HasHomeCarouselPeek is true so a sliver of the next tile shows past the normal edge — the classic
+    /// "there's more, keep scrolling" cue (reported live: the fixed 7-tile shelf gave no sense the library
+    /// was any bigger than exactly that). The Canvas needs ClipToBounds="True" (see HomeView.xaml) for this
+    /// to actually crop that tile rather than render it in full past the visible shelf. See HomeView.xaml.cs's
     /// ApplyOffset for the matching per-tile left-position math.</summary>
-    public double HomeCarouselCanvasWidth => HomeCenterWidth + HomeCarouselSideCount * HomeSlotPitch;
+    public double HomeCarouselCanvasWidth =>
+        HomeCenterWidth + HomeCarouselSideCount * HomeSlotPitch + (HasHomeCarouselPeek ? Math.Round(BaseHomeCarouselPeekReveal * UiScale) : 0);
     public double HomeCarouselCanvasHeight => HomeCenterHeight;
+
+    private string _homeCarouselPositionLabel = "";
+    /// <summary>"12 / 45" — which game is selected out of how many are eligible for the shelf (see
+    /// GetHomeCarouselGames). Same "feels like only seven games" motivation as the peek slot above: shown
+    /// near the shelf so the library's real size is always visible, not just implied by scrolling.</summary>
+    public string HomeCarouselPositionLabel
+    {
+        get => _homeCarouselPositionLabel;
+        private set => SetProperty(ref _homeCarouselPositionLabel, value);
+    }
 
     /// <summary>Re-derives <see cref="UiScale"/> from an actual window width — see MainWindow's SizeChanged hook.</summary>
     public void UpdateUiScale(double windowWidth) => UiScale = Math.Clamp(windowWidth / ReferenceScreenWidth, MinUiScale, 1.0);
@@ -742,11 +849,47 @@ public sealed class MainViewModel : ViewModelBase
     private ImageSource? _homeBackgroundImage;
     /// <summary>Home's full-screen backdrop — decoded at BackgroundDecodeWidth (1920), not the ~200px tile
     /// thumbnail (GameTileViewModel.Artwork), which is exactly why the background looked pixelated when it
-    /// was bound directly to that instead of this.</summary>
+    /// was bound directly to that instead of this. Still set even when HomeAnimatedBackgroundPath below is also
+    /// set — a static first-frame decode that MainWindow.xaml layers underneath the animated control, shown
+    /// if the GIF hasn't finished (re-)decoding yet or fails to parse.</summary>
     public ImageSource? HomeBackgroundImage
     {
         get => _homeBackgroundImage;
         private set => SetProperty(ref _homeBackgroundImage, value);
+    }
+
+    private string? _homeBackgroundGifPath;
+    /// <summary>Non-null only when the resolved Home background is an animated hero (SteamGridDB's
+    /// types=animated,static — see ArtworkFetcher.FetchHeroAndCacheAsync, which caches those with a .gif
+    /// extension specifically so this can tell without touching the file). Drives
+    /// Controls/AnimatedGifImage, layered over HomeBackgroundImage in MainWindow.xaml.</summary>
+    public string? HomeAnimatedBackgroundPath
+    {
+        get => _homeBackgroundGifPath;
+        private set => SetProperty(ref _homeBackgroundGifPath, value);
+    }
+
+    private ImageSource? _homeBackgroundBlurredImage;
+    /// <summary>A one-shot blurred snapshot (Controls/AnimatedImage.DecodeBlurredFirstFrame — Skia's own
+    /// blur, applied once, not a live per-frame WPF effect) of whatever's currently behind the letterboxed
+    /// art, filling the top/bottom bars a landscape hero/wallpaper leaves instead of flat dark bars. Only
+    /// set for a landscape source (see HomeBackgroundStretch) — the portrait boxart fallback already covers
+    /// the whole frame on its own, so there'd be nothing for this to ever show there anyway.</summary>
+    public ImageSource? HomeBackgroundBlurredImage
+    {
+        get => _homeBackgroundBlurredImage;
+        private set => SetProperty(ref _homeBackgroundBlurredImage, value);
+    }
+
+    private Stretch _homeBackgroundStretch = Stretch.UniformToFill;
+    /// <summary>Uniform (letterbox, nothing cropped) for a landscape-shaped background — a custom
+    /// wallpaper or SteamGridDB's ~3:1 hero banner — vs. UniformToFill (crop to cover) for the portrait
+    /// boxart fallback, which looks right zoomed-in rather than pillarboxed tiny in the middle of the
+    /// screen. See RefreshHomeBackgroundAsync for which drives this.</summary>
+    public Stretch HomeBackgroundStretch
+    {
+        get => _homeBackgroundStretch;
+        private set => SetProperty(ref _homeBackgroundStretch, value);
     }
 
     /// <summary>Whether the Play button's countdown ring should be visible at all — same condition
@@ -794,6 +937,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand BrowseScreenSaverMusicCommand { get; }
     public ICommand ClearScreenSaverMusicCommand { get; }
     public ICommand DismissErrorCommand { get; }
+    public ICommand DismissStatusCommand { get; }
     public ICommand OpenUpdateCommand { get; }
     public ICommand DismissUpdateCommand { get; }
     public ICommand UseDefaultSteamGridDbApiKeyCommand { get; }
@@ -836,13 +980,48 @@ public sealed class MainViewModel : ViewModelBase
         if (token == _errorToastToken) HasErrorMessage = false;
     }
 
-    /// <summary>Called once by App after UpdateChecker finds a newer release — nudge-only, no
-    /// silent download (see UpdateChecker's own doc comment for why).</summary>
-    public void ShowUpdateAvailable(string version, string releaseUrl)
+    /// <summary>Called once by App after UpdateChecker finds a newer release. Still no *silent*
+    /// background install (see UpdateChecker's own doc comment for why) — clicking the banner now
+    /// downloads the installer directly instead of just opening the release page, see OpenUpdateCommand.</summary>
+    public void ShowUpdateAvailable(UpdateChecker.UpdateInfo update)
     {
-        UpdateAvailableMessage = $"Cartridge OS {version} is available.";
-        _updateReleaseUrl = releaseUrl;
+        UpdateAvailableMessage = $"Cartridge OS {update.Version} is available.";
+        _updateInfo = update;
         HasUpdateAvailable = true;
+    }
+
+    /// <summary>Downloads the new installer directly and hands it to Windows to run (still triggers the
+    /// same UAC/SmartScreen prompt a manual download would — see UpdateChecker). Falls back to just
+    /// opening the release page — the old behavior, and always available since ReleaseUrl is required —
+    /// if there's no DownloadUrl published yet or the download/verify/launch fails for any reason (offline,
+    /// GitHub unreachable, hash mismatch), so the user is never left with a dead button.</summary>
+    private async Task DownloadUpdateAsync()
+    {
+        if (_updateInfo is not { } update) return;
+
+        if (string.IsNullOrEmpty(update.DownloadUrl))
+        {
+            Process.Start(new ProcessStartInfo(update.ReleaseUrl) { UseShellExecute = true });
+            HasUpdateAvailable = false;
+            return;
+        }
+
+        IsDownloadingUpdate = true;
+        try
+        {
+            await UpdateChecker.DownloadAndRunInstallerAsync(update);
+            HasUpdateAvailable = false;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            ShowError("Couldn't download the update automatically — opening the release page instead.");
+            Process.Start(new ProcessStartInfo(update.ReleaseUrl) { UseShellExecute = true });
+            HasUpdateAvailable = false;
+        }
+        finally
+        {
+            IsDownloadingUpdate = false;
+        }
     }
 
     public MainViewModel()
@@ -865,13 +1044,10 @@ public sealed class MainViewModel : ViewModelBase
         RenameGameCommand = new RelayCommand(RenameGame);
         SearchArtworkOnlineCommand = new RelayCommand(() => { if (SelectedGame is { } game) SearchOnline($"{game.Title} box art"); });
         DismissErrorCommand = new RelayCommand(() => HasErrorMessage = false);
-        OpenUpdateCommand = new RelayCommand(() =>
-        {
-            if (_updateReleaseUrl is { } url) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            HasUpdateAvailable = false;
-        });
+        DismissStatusCommand = new RelayCommand(() => HasStatusMessage = false);
+        OpenUpdateCommand = new RelayCommand(() => _ = DownloadUpdateAsync());
         DismissUpdateCommand = new RelayCommand(() => HasUpdateAvailable = false);
-        ScanForGamesCommand = new RelayCommand(ScanForGames);
+        ScanForGamesCommand = new RelayCommand(async () => await ScanForGamesAsync());
         FindMoreGamesCommand = new RelayCommand(async () => await FindMoreGamesAsync());
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ChangeHomeBackgroundCommand = new RelayCommand(async () => await ChangeHomeBackgroundAsync());
@@ -1371,7 +1547,12 @@ public sealed class MainViewModel : ViewModelBase
         Process.Start(new ProcessStartInfo($"https://www.google.com/search?tbm=isch&q={Uri.EscapeDataString(query)}") { UseShellExecute = true });
 
     /// <summary>Sets the currently selected game's own Home background override — per-game, not a single
-    /// app-wide wallpaper (see Game.CustomBackgroundPath).</summary>
+    /// app-wide wallpaper (see Game.CustomBackgroundPath). Accepts .gif/.webp alongside plain images —
+    /// RefreshHomeBackgroundAsync already treats any CustomBackgroundPath ending in one of those as an
+    /// animated background (same extension check it uses for the auto-fetched SteamGridDB hero), so a
+    /// user-picked animated file plays through Controls/AnimatedImage exactly like a fetched one, no
+    /// separate code path needed. RevertHomeBackgroundCommand below already works for this case too — it
+    /// just clears CustomBackgroundPath back to null regardless of what kind of file it was.</summary>
     private async Task ChangeHomeBackgroundAsync()
     {
         var game = SelectedGame;
@@ -1380,7 +1561,7 @@ public sealed class MainViewModel : ViewModelBase
         var dialog = new OpenFileDialog
         {
             Title = $"Choose a Home background for {game.Title}",
-            Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+            Filter = "Images and animations (*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp"
         };
         if (dialog.ShowDialog() != true) return;
 
@@ -1469,15 +1650,60 @@ public sealed class MainViewModel : ViewModelBase
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
+    // Bumped on every call so a slower call's decode can't land after a faster later call's and overwrite
+    // the background with a stale, no-longer-selected game's art — see RefreshHomeBackgroundAsync.
+    private int _homeBackgroundRefreshToken;
+
+    // How long to wait, doing nothing, before actually starting the (relatively heavy: a full 1920px decode
+    // plus a Skia blur pass) background refresh. Without this, holding a direction or pressing through the
+    // shelf quickly fired that full pipeline on every single intermediate selection — each one discarded via
+    // the token check below once superseded, but only after fully running and burning real CPU/decode-thread
+    // time, which is exactly what made rapid switching itself feel sluggish (reported live). Games only
+    // flicked past on the way to somewhere else never need their background decoded at all.
+    private static readonly TimeSpan HomeBackgroundRefreshDebounce = TimeSpan.FromMilliseconds(120);
+
     /// <summary>Redecodes the Home background at full resolution for whichever game is now selected — prefers
     /// the wide hero image once one's been fetched, falls back to a high-res decode of the portrait boxart in
     /// the meantime (or permanently, if no hero is ever found). Also kicks off a lazy hero fetch the first
     /// time each game is selected without one.</summary>
     private async Task RefreshHomeBackgroundAsync()
     {
+        int token = ++_homeBackgroundRefreshToken;
+
+        await Task.Delay(HomeBackgroundRefreshDebounce);
+        if (token != _homeBackgroundRefreshToken) return; // selection moved on again before the debounce even elapsed
+
         var game = SelectedGame;
-        string? path = game?.CustomBackgroundPath ?? game?.HeroImagePath ?? game?.ArtworkPath;
-        HomeBackgroundImage = string.IsNullOrEmpty(path) ? null : await ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+        string? landscapeSource = game?.CustomBackgroundPath ?? game?.HeroImagePath;
+        string? path = landscapeSource ?? game?.ArtworkPath;
+
+        // Both independent decodes of the same source — run together instead of one after the other, since
+        // together they're the whole reason this got slow enough to need debouncing in the first place.
+        Task<BitmapImage?> imageTask = string.IsNullOrEmpty(path) ? Task.FromResult<BitmapImage?>(null) : ArtworkCache.LoadAsync(path, BackgroundDecodeWidth);
+        // Only for a landscape source — the portrait boxart fallback covers the whole frame on its own (see
+        // HomeBackgroundStretch below), so there's no letterbox gap for a blurred fill to ever show through
+        // there anyway, and decoding+blurring a frame nothing will display would just be wasted work.
+        Task<BitmapSource?> blurredTask = landscapeSource is null ? Task.FromResult<BitmapSource?>(null)
+            : Task.Run(() => AnimatedImage.DecodeBlurredFirstFrame(landscapeSource, BackgroundBlurSigma));
+        await Task.WhenAll(imageTask, blurredTask);
+        var image = imageTask.Result;
+        var blurred = blurredTask.Result;
+
+        // Superseded by a newer selection while the decode above was in flight — switching games quickly
+        // (reported live, with an animated hero involved) let a slower call for an earlier selection land
+        // after a faster later call and overwrite the background with the wrong, no-longer-selected game's
+        // art, which stuck around until the next selection change happened to resolve in the right order.
+        if (token != _homeBackgroundRefreshToken) return;
+
+        HomeBackgroundImage = image;
+        HomeBackgroundBlurredImage = blurred;
+        HomeAnimatedBackgroundPath = path is { } p && (p.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) ? p : null;
+        // A custom background or SteamGridDB's ~3:1 hero banner is landscape-shaped — cropping it to cover
+        // a much taller screen threw away most of its width (reported live as "the background is getting
+        // cropped"). The portrait boxart fallback is the opposite shape and actually looks right cropped
+        // to fill (zoomed into the cover art) rather than pillarboxed tiny in the middle of the screen, so
+        // only the landscape sources switch to letterboxing.
+        HomeBackgroundStretch = landscapeSource is not null ? Stretch.Uniform : Stretch.UniformToFill;
 
         if (game is not null && game.HeroImagePath is null && _heroFetchAttempted.Add(game.Id))
             _ = FetchHeroThenRefreshAsync(game);
@@ -1496,13 +1722,30 @@ public sealed class MainViewModel : ViewModelBase
         if (ReferenceEquals(SelectedGame, tile)) await RefreshHomeBackgroundAsync(); // swap the boxart-based backdrop for the real hero now that it's ready
     }
 
-    private void ScanForGames()
+    private async Task ScanForGamesAsync()
     {
-        var (games, failed) = ScanTrustedLauncherSources();
-        ImportScannedGames(games);
-        // User-initiated (clicked "Scan for Games"), so a failure here should actually be visible —
-        // unlike RescanInBackgroundAsync below, which deliberately doesn't toast for the same failure.
-        if (failed.Count > 0) ShowError($"Couldn't scan {string.Join(", ", failed)} — see scan.log for details.");
+        if (IsScanningLibrary) return; // already running — the button disables itself too, this just guards a stray re-entry
+        IsScanningLibrary = true;
+        try
+        {
+            int before = Games.Count;
+            // Off the UI thread — this used to run inline and could visibly hitch the window for the
+            // registry/manifest reads across all 7 scanners, on top of giving zero feedback either way.
+            var (games, failed) = await Task.Run(ScanTrustedLauncherSources);
+            ImportScannedGames(games);
+            LogScan($"Scan for Games: found {games.Count}, imported {Games.Count - before} new, failed [{string.Join(", ", failed)}]");
+
+            // User-initiated (clicked "Scan for Games"), so a failure here should actually be visible —
+            // unlike RescanInBackgroundAsync below, which deliberately doesn't toast for the same failure.
+            if (failed.Count > 0)
+                ShowError($"Couldn't scan {string.Join(", ", failed)} — see scan.log for details.");
+            else
+                ShowStatus(Games.Count > before ? $"Added {Games.Count - before} new game(s)." : "No new games found.");
+        }
+        finally
+        {
+            IsScanningLibrary = false;
+        }
     }
 
     // Runs the same trusted-launcher scan the button does, but off the UI thread (registry/file
@@ -1554,15 +1797,22 @@ public sealed class MainViewModel : ViewModelBase
         return (games, failed);
     }
 
-    // ponytail: plain append-to-file log, same pattern as DiscordRichPresence/ArtworkFetcher's own logs —
-    // this file stays tiny (scanners essentially never throw; this exists for the rare case one does).
-    private static void LogScanFailure(string scannerName, Exception ex)
+    // ponytail: plain append-to-file log, same pattern as DiscordRichPresence/ArtworkFetcher's own logs.
+    private static void LogScanFailure(string scannerName, Exception ex) =>
+        LogScan($"{scannerName} scanner failed: {ex}\n");
+
+    // Added after a live report that was impossible to actually diagnose from a screenshot alone ("Find
+    // More Games" showed a full Program-Files-style sweep despite a specific folder being picked in the
+    // UI) — with no record of what directory/recursive flag a given click actually used, there was no way
+    // to tell a UI-selection bug from a scanner bug after the fact. Every attempt logs now, not just
+    // failures, so the next report comes with hard data instead of a screenshot to reverse-engineer.
+    private static void LogScan(string message)
     {
         try
         {
             string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CartridgeOS", "scan.log");
             Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {scannerName} scanner failed: {ex}\n\n");
+            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
         }
         catch (IOException) { }
     }
@@ -1571,9 +1821,20 @@ public sealed class MainViewModel : ViewModelBase
     // synchronously on the UI thread like the other heuristic scan used to would freeze the window.
     private async Task FindMoreGamesAsync()
     {
+        if (IsFindingMoreGames) return; // already running — the button disables itself too, this just guards a stray re-entry
         var directoryToScan = SelectedScanDirectory;
         var recursive = IsRecursiveScan;
-        var candidates = await ScanCandidatesAsync(directoryToScan, recursive);
+
+        List<Game> candidates;
+        IsFindingMoreGames = true;
+        try
+        {
+            candidates = await ScanCandidatesAsync(directoryToScan, recursive);
+        }
+        finally
+        {
+            IsFindingMoreGames = false;
+        }
 
         // No early-return on an empty first scan — the window now owns its own directory picker (see
         // ScanResultsViewModel), so opening it even with zero initial results lets the user pick a
@@ -1623,6 +1884,7 @@ public sealed class MainViewModel : ViewModelBase
             return combined.Where(g => !existingExePaths.Contains(g.ExecutablePath)).ToList();
         });
 
+        LogScan($"Find More Games: directory=[{directory ?? "(default sweep)"}] recursive={recursive} -> {result.Count} candidate(s), failed [{string.Join(", ", failed)}]");
         if (failed.Count > 0) ShowError($"Couldn't complete {string.Join(", ", failed)} — see scan.log for details.");
         return result;
     }

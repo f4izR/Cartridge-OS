@@ -95,19 +95,40 @@ public sealed class StandaloneExecutableScanner
         {
             if (!Directory.Exists(root)) continue;
 
+            // A default sweep root (Program Files) is a *container* of per-game folders, so only its
+            // children were ever worth checking — but a directory the user explicitly picked via the
+            // scan-directory picker can just as easily BE the game's own folder, with the exe sitting
+            // directly inside it (confirmed live: a folder with one exe directly inside it, picked via
+            // Browse..., found nothing under the old children-only walk). Check the root itself first.
+            string rootName = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar));
+            if (!IsHubOrSkip(rootName))
+                games.AddRange(CandidatesForFolder(root, rootName));
+
             foreach (var folder in Directory.EnumerateDirectories(root))
             {
                 string folderName = Path.GetFileName(folder);
                 if (IsHubOrSkip(folderName)) continue;
 
-                string? exe = ExecutableHeuristics.FindLikelyGameExecutable(folder);
-                if (exe is null) continue;
-
-                games.Add(new Game { Title = folderName, ExecutablePath = exe });
+                games.AddRange(CandidatesForFolder(folder, folderName));
             }
         }
         return games;
     }
+
+    // One candidate titled after the folder when it holds exactly one plausible exe — the normal
+    // per-game-install shape — or one candidate per exe, titled after the exe itself, when it holds
+    // several: a flat folder of loose exes with no per-game subfolder structure isn't one game, so it
+    // can't share one title either (confirmed live: a folder with 7 loose exes only ever surfaced 1
+    // candidate — whichever ExecutableHeuristics.FindLikelyGameExecutable happened to pick — before this).
+    private static IEnumerable<Game> CandidatesForFolder(string folder, string folderName)
+    {
+        var exes = ExecutableHeuristics.FindLikelyGameExecutables(folder);
+        if (exes.Count == 1) return [new Game { Title = folderName, ExecutablePath = exes[0] }];
+        return exes.Select(exe => new Game { Title = TitleFromExeName(exe), ExecutablePath = exe });
+    }
+
+    private static string TitleFromExeName(string exePath) =>
+        Path.GetFileNameWithoutExtension(exePath).Replace('_', ' ');
 
     /// <summary>"Scan whole drive" — unlike the single-level Scan(roots) overload, this walks the whole
     /// subtree under each root looking for an install-shaped folder anywhere in it. The game's title
@@ -166,11 +187,20 @@ public sealed class StandaloneExecutableScanner
 
         if (!isHub && candidateNameHere is not null)
         {
-            string? exe = ExecutableHeuristics.FindLikelyGameExecutable(dir);
-            if (exe is not null)
+            // Same single-vs-multi distinction as CandidatesForFolder (used by the shallow Scan(roots)
+            // overload) — one exe keeps the depth-aware candidateNameHere naming below, several loose exes
+            // in one folder get titled per-exe instead since candidateNameHere can't describe all of them.
+            var exes = ExecutableHeuristics.FindLikelyGameExecutables(dir);
+            if (exes.Count == 1)
             {
-                games.Add(new Game { Title = candidateNameHere, ExecutablePath = exe });
+                games.Add(new Game { Title = candidateNameHere, ExecutablePath = exes[0] });
                 return; // claimed — don't also surface something nested inside this game's own folder
+            }
+            if (exes.Count > 1)
+            {
+                foreach (var exe in exes)
+                    games.Add(new Game { Title = TitleFromExeName(exe), ExecutablePath = exe });
+                return;
             }
         }
 

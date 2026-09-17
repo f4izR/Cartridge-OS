@@ -178,8 +178,20 @@
                         <TextBlock Text="Trusted Sources" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
                                    Text="Looks for games already installed through Steam, Epic, GOG, Ubisoft, EA, Battle.net, and Riot." />
-                        <Button Content="Scan for Games" Command="{Binding ScanForGamesCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+                        <Button Command="{Binding ScanForGamesCommand}"
+                                HorizontalAlignment="Left" Margin="0,0,0,20">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                    <Setter Property="Content" Value="Scan for Games" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsScanningLibrary}" Value="True">
+                                            <Setter Property="Content" Value="Scanning..." />
+                                            <Setter Property="IsEnabled" Value="False" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <TextBlock Text="Everything Else" Style="{StaticResource SettingsActionLabelStyle}" />
                         <TextBlock Style="{StaticResource SettingsDescriptionStyle}"
@@ -204,8 +216,20 @@
                         <CheckBox Content="Scan whole drive (finds games installed a few folders deep, e.g. Riot Games\VALORANT — slower)"
                                   IsChecked="{Binding IsRecursiveScan}" Style="{StaticResource ThemedCheckBoxStyle}"
                                   FontSize="12" Margin="0,0,0,8" />
-                        <Button Content="Find More Games" Command="{Binding FindMoreGamesCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,0,0,20" />
+                        <Button Command="{Binding FindMoreGamesCommand}"
+                                HorizontalAlignment="Left" Margin="0,0,0,20">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                    <Setter Property="Content" Value="Find More Games" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFindingMoreGames}" Value="True">
+                                            <Setter Property="Content" Value="Searching..." />
+                                            <Setter Property="IsEnabled" Value="False" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <TextBlock Text="Manage Games" Style="{StaticResource SettingsSectionHeadingStyle}" />
 
