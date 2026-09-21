@@ -216,7 +216,7 @@
                 <controls:AnimatedImage x:Name="AnimatedBackgroundArt"
                                          SourcePath="{Binding HomeAnimatedBackgroundPath}"
                                          Stretch="{Binding HomeBackgroundStretch}"
-                                         RenderOptions.BitmapScalingMode="HighQuality" />
+                                         RenderOptions.BitmapScalingMode="Linear" />
             </Grid>
             <!-- Bottom-up fade so the carousel/details text over it stays legible regardless of what the art
                  looks like there — there's no blur to fall back on for that here. Starts higher and reaches
@@ -330,6 +330,20 @@
                             <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                                        Foreground="{DynamicResource BrandCyanBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="Resume Game" Foreground="{DynamicResource BrandCyanBrush}"
+                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Pairs with Resume Game — same visibility; kills the running game (App.QuitRunningGame,
+                         the same path the overlay's Quit Game uses). -->
+                    <Border Style="{StaticResource StatusPillStyle}" Cursor="Hand"
+                            MouseLeftButtonUp="CloseGame_Click"
+                            Visibility="{Binding IsGameRunning, Converter={StaticResource BoolToVisibility}}"
+                            ToolTip="{Binding RunningGameTitle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       Foreground="{StaticResource ErrorBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Close Game" Foreground="{StaticResource ErrorBrush}"
                                        FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
                         </StackPanel>
                     </Border>

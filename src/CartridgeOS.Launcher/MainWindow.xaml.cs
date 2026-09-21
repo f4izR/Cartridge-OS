@@ -571,6 +571,8 @@ public partial class MainWindow : Window
 
     private void ResumeGame_Click(object sender, MouseButtonEventArgs e) => ((App)Application.Current).TryResumeRunningGame();
 
+    private void CloseGame_Click(object sender, MouseButtonEventArgs e) => ((App)Application.Current).QuitRunningGame();
+
     public void ShowUpdateAvailable(UpdateChecker.UpdateInfo update) => ((MainViewModel)DataContext).ShowUpdateAvailable(update);
 
     private PowerMenuWindow? _powerMenuWindow;

@@ -32,8 +32,36 @@ public partial class GameLaunchWindow : Window
     /// than waiting on a fresh decode, then upgrades in place.</summary>
     public void SetArtwork(ImageSource artwork) => ArtworkImage.Source = artwork;
 
+    /// <summary>Landscape hero/custom background: letterboxed over a blurred fill, no zoom — cropping and
+    /// scaling it up is what cost resolution with the portrait boxart.</summary>
+    public void SetLandscapeBackground(ImageSource sharp, ImageSource? blurred)
+    {
+        BlurredImage.Source = blurred;
+        ArtworkImage.Stretch = Stretch.Uniform;
+        ArtworkImage.Source = sharp;
+        // No slow zoom-in (it upscales the picture) — just a short settle from slightly enlarged to true
+        // size as it fades in, so the swap from black isn't a hard cut.
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var settle = new DoubleAnimation(1.05, 1.0, TimeSpan.FromMilliseconds(800)) { EasingFunction = ease };
+        ArtworkScale.BeginAnimation(ScaleTransform.ScaleXProperty, settle);
+        ArtworkScale.BeginAnimation(ScaleTransform.ScaleYProperty, settle);
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(450));
+        ArtworkImage.BeginAnimation(OpacityProperty, fade);
+        BlurredImage.BeginAnimation(OpacityProperty, fade);
+    }
+
     private void StartAnimations()
     {
+        // Entrance: whole splash fades up from black, then the title rises into place and fades in a beat
+        // later — instead of the window just appearing fully formed.
+        Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(350)));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var riseDelay = TimeSpan.FromMilliseconds(250);
+        TextShift.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(40, 0, TimeSpan.FromMilliseconds(650)) { BeginTime = riseDelay, EasingFunction = ease });
+        TextPanel.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(650)) { BeginTime = riseDelay, EasingFunction = ease });
+
         // Slow one-way "Ken Burns" zoom — the window's lifetime is short (a few seconds) so this never
         // needs to loop or reverse, just keep drifting in for as long as the splash stays up.
         var zoom = new DoubleAnimation(1.0, 1.08, TimeSpan.FromSeconds(6))

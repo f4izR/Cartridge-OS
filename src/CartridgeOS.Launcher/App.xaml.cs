@@ -398,8 +398,21 @@ public partial class App : Application
         _lastSelectedGameId = _launcherWindow?.CurrentSelectedGameId;
         _launcherWindow = null;
 
+        ReleaseMemory();
+    }
+
+    /// <summary>Gives memory back to the OS, not just to the .NET heap: GC.Collect alone left the process at
+    /// ~250-300MB after closing to tray (measured — the live managed heap was only ~8MB), because the runtime
+    /// keeps freed pages committed and freed native bitmap memory stays resident until trimmed. Compacting
+    /// the LOH (the animated background's frames) and emptying the working set is what makes Task Manager's
+    /// Memory column actually drop; pages fault back in on demand when the launcher is reopened.</summary>
+    private static void ReleaseMemory()
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect();
         GC.WaitForPendingFinalizers();
+        GC.Collect();
+        EmptyWorkingSet(Process.GetCurrentProcess().Handle);
     }
 
     // Ctrl+Shift+O or controller Start — only meaningful while a game we launched (and can therefore
@@ -442,6 +455,7 @@ public partial class App : Application
         ShowLauncher();
     }
 
+    [DllImport("psapi.dll")] private static extern bool EmptyWorkingSet(IntPtr hProcess);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
@@ -510,10 +524,11 @@ public partial class App : Application
         SetForegroundWindow(handle);
 
         _launcherWindow?.Hide(); // same tray-only behavior as the initial launch — see LaunchGame's comment
+        _ = Task.Delay(3000).ContinueWith(_ => ReleaseMemory()); // hidden window: frames are released by then (AnimatedImage), so trim what they left
         return true;
     }
 
-    private void QuitRunningGame()
+    internal void QuitRunningGame()
     {
         try
         {
@@ -570,9 +585,13 @@ public partial class App : Application
         // desktop otherwise. Opens with whatever artwork is already decoded (the ~200px tile thumbnail —
         // soft at fullscreen size but instant), then upgrades to a real fullscreen decode once that's
         // ready. See DismissLaunchSplashAsync for how/when it closes.
-        var launchSplash = new GameLaunchWindow(game.Title, game.Artwork);
+        // Same source Home's background uses (custom background, then hero) — landscape and already
+        // high-res, so no zoomed-in boxart; falls back to the boxart only when neither file exists.
+        string? landscape = new[] { game.CustomBackgroundPath, game.HeroImagePath }.FirstOrDefault(p => p is not null && File.Exists(p));
+        var launchSplash = new GameLaunchWindow(game.Title, landscape is null ? game.Artwork : null);
         launchSplash.Show();
-        if (!string.IsNullOrEmpty(game.ArtworkPath)) _ = LoadHiResLaunchArtworkAsync(launchSplash, game.ArtworkPath);
+        if (landscape is not null) _ = LoadLandscapeLaunchBackgroundAsync(launchSplash, landscape);
+        else if (!string.IsNullOrEmpty(game.ArtworkPath)) _ = LoadHiResLaunchArtworkAsync(launchSplash, game.ArtworkPath);
 
         // Runs before Process.Start, not after — this is what actually updates Recently Played's hero
         // card/order, and it should reflect the moment the user chose to launch, not be at the mercy of
@@ -627,6 +646,7 @@ public partial class App : Application
         // Steam/Xbox launches go through steam://, shell:appsFolder\..., and the launcher should still get
         // out of the way for those exactly the same as a direct exe launch.
         _launcherWindow?.Hide();
+        _ = Task.Delay(3000).ContinueWith(_ => ReleaseMemory()); // hidden window: frames are released by then (AnimatedImage), so trim what they left
 
         // Keeps the splash up until the game's own window actually appears (polling MainWindowHandle,
         // same signal TryResumeRunningGame/HandleGameProcessExitedAsync use elsewhere), capped at
@@ -735,6 +755,18 @@ public partial class App : Application
 
     private const int LaunchSplashDecodeWidth = 1920; // fullscreen backdrop, not a tile — same width MainViewModel's Home background uses
     private static readonly TimeSpan LaunchSplashMinDisplay = TimeSpan.FromSeconds(1.1); // floor so an already-fast-launching game doesn't just flash the splash
+
+    private static async Task LoadLandscapeLaunchBackgroundAsync(GameLaunchWindow splash, string path)
+    {
+        var sharpTask = ArtworkCache.LoadAsync(path, LaunchSplashDecodeWidth);
+        var blurTask = Task.Run(() =>
+        {
+            try { return Controls.AnimatedImage.DecodeBlurredFirstFrame(path, 40); }
+            catch (ArgumentException) { return null; }
+        });
+        await Task.WhenAll(sharpTask, blurTask);
+        if (sharpTask.Result is { } sharp) splash.SetLandscapeBackground(sharp, blurTask.Result);
+    }
 
     private static async Task LoadHiResLaunchArtworkAsync(GameLaunchWindow splash, string artworkPath)
     {

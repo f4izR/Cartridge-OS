@@ -15,9 +15,12 @@
          any real loading screen appears. Sized/positioned via MonitorHelper.CoverMonitor in code-behind
          (same technique OverlayWindow/the screen saver use), not WindowState=Maximized, so it lands on the
          right monitor in physical pixels regardless of per-monitor DPI. -->
-    <Grid ClipToBounds="True">
+    <Grid x:Name="Root" ClipToBounds="True">
         <!-- RenderTransform origin centered so the slow zoom (started in code-behind's Loaded handler)
              grows from the middle of the screen rather than drifting toward a corner. -->
+        <!-- Blurred fill behind a letterboxed landscape background (see SetLandscapeBackground) — same
+             look as Home's background; empty for the boxart fallback, which covers the whole frame. -->
+        <Image x:Name="BlurredImage" Stretch="UniformToFill" />
         <Image x:Name="ArtworkImage" Stretch="UniformToFill" RenderTransformOrigin="0.5,0.5">
             <Image.RenderTransform>
                 <ScaleTransform x:Name="ArtworkScale" ScaleX="1.0" ScaleY="1.0" />
@@ -34,7 +37,8 @@
             </Border.Background>
         </Border>
 
-        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,96">
+        <StackPanel x:Name="TextPanel" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,96">
+            <StackPanel.RenderTransform><TranslateTransform x:Name="TextShift" Y="40" /></StackPanel.RenderTransform>
             <TextBlock x:Name="TitleText" FontSize="38" FontWeight="Bold" Foreground="White"
                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
                        MaxWidth="900" />

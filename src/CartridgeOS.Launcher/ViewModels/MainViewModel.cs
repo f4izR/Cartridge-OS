@@ -1674,7 +1674,10 @@ public sealed class MainViewModel : ViewModelBase
         if (token != _homeBackgroundRefreshToken) return; // selection moved on again before the debounce even elapsed
 
         var game = SelectedGame;
-        string? landscapeSource = game?.CustomBackgroundPath ?? game?.HeroImagePath;
+        // File.Exists: a recorded hero/custom path whose file has gone missing must fall through to the boxart
+        // instead of throwing below (SKCodec.Create throws on an unreadable file, which used to abort this
+        // whole refresh and leave the previous game's background on screen).
+        string? landscapeSource = new[] { game?.CustomBackgroundPath, game?.HeroImagePath }.FirstOrDefault(p => p is not null && File.Exists(p));
         string? path = landscapeSource ?? game?.ArtworkPath;
 
         // Both independent decodes of the same source — run together instead of one after the other, since
@@ -1684,7 +1687,7 @@ public sealed class MainViewModel : ViewModelBase
         // HomeBackgroundStretch below), so there's no letterbox gap for a blurred fill to ever show through
         // there anyway, and decoding+blurring a frame nothing will display would just be wasted work.
         Task<BitmapSource?> blurredTask = landscapeSource is null ? Task.FromResult<BitmapSource?>(null)
-            : Task.Run(() => AnimatedImage.DecodeBlurredFirstFrame(landscapeSource, BackgroundBlurSigma));
+            : Task.Run(() => { try { return AnimatedImage.DecodeBlurredFirstFrame(landscapeSource, BackgroundBlurSigma); } catch (ArgumentException) { return null; } });
         await Task.WhenAll(imageTask, blurredTask);
         var image = imageTask.Result;
         var blurred = blurredTask.Result;

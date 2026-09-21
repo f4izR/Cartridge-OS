@@ -35,7 +35,7 @@ public sealed class AnimatedImage : Image
 {
     // ~4.7MB/frame at a typical 1920x620 hero → ~70MB ceiling per animation, independent of how many total
     // frames the source has. Tunable if a real animation turns out to need more headroom to stay smooth.
-    private const int FrameBufferCapacity = 15;
+    private const int FrameBufferCapacity = 5; // ~4.7MB of native memory each; a small buffer is enough to smooth decode jitter
 
     public static readonly DependencyProperty SourcePathProperty = DependencyProperty.Register(
         nameof(SourcePath), typeof(string), typeof(AnimatedImage), new PropertyMetadata(null, OnSourcePathChanged));
@@ -106,6 +106,7 @@ public sealed class AnimatedImage : Image
                     return; // producer finished and the buffer's drained — a single-still-frame source, not a real animation
                 }
 
+                ct.ThrowIfCancellationRequested(); // Release() may have cleared Source while Take was returning — don't resurrect a stale frame
                 Source = frame.Bitmap;
                 await Task.Delay(frame.Delay, ct);
             }
@@ -162,7 +163,7 @@ public sealed class AnimatedImage : Image
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is IOException or NotSupportedException) { }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException) { }
         finally
         {
             buffer.CompleteAdding();
