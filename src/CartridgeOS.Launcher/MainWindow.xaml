@@ -549,7 +549,16 @@
         </Grid>
 
         <!-- Collapsible settings sidebar — slide/fade animation lives in SettingsPanel.xaml itself. -->
-        <views:SettingsPanel x:Name="SettingsHost" Grid.Column="1" />
+        <!-- Overlays the content (right-aligned, spanning both columns) instead of taking its own Auto column,
+             so opening it no longer reflows the Home shelf and knocks its peek-fade gradient out of place.
+             The transparent scrim behind it closes settings on a click anywhere outside the panel. -->
+        <Border Grid.ColumnSpan="2" Background="Transparent"
+                Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border.InputBindings>
+                <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleSettingsCommand}" />
+            </Border.InputBindings>
+        </Border>
+        <views:SettingsPanel x:Name="SettingsHost" Grid.ColumnSpan="2" HorizontalAlignment="Right" />
 
         <!-- Error toast — top-center, above everything else (last in z-order). The fullscreen kiosk shell
              has no title bar/status bar for a background failure (a scanner throwing, a DB write failing)

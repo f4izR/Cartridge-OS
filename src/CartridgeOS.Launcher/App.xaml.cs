@@ -428,7 +428,7 @@ public partial class App : Application
             return;
         }
 
-        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, QuitRunningGame, _currentController) { IsCursorLocked = _cursorLocked };
+        var overlayVm = new OverlayViewModel(_runningGameTitle ?? "Game", ReturnToLauncher, ResumeFromOverlay, QuitRunningGame, _currentController) { IsCursorLocked = _cursorLocked };
         _overlayWindow = new OverlayWindow(overlayVm);
         _overlayWindow.Closed += (_, _) => _overlayWindow = null;
         _overlayWindow.Show();
@@ -447,6 +447,12 @@ public partial class App : Application
     {
         _overlayWindow?.Close();
         _overlayWindow = null;
+    }
+
+    private void ResumeFromOverlay()
+    {
+        CloseOverlay();
+        TryResumeRunningGame();
     }
 
     private void ReturnToLauncher()
@@ -605,13 +611,20 @@ public partial class App : Application
         var startInfo = new ProcessStartInfo(game.ExecutablePath)
         {
             UseShellExecute = true,
-            WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath) ?? "",
+            // steam:// and shell:appsFolder\ aren't paths — GetDirectoryName would yield a bogus dir like
+            // "steam:\rungameid" that the protocol handler (steam.exe) inherits as its cwd.
+            WorkingDirectory = game.ExecutablePath.Contains("://") || game.ExecutablePath.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
+                ? ""
+                : Path.GetDirectoryName(game.ExecutablePath) ?? "",
         };
         Process? process;
         bool launchFailed = false;
         try
         {
             process = Process.Start(startInfo);
+            // steam.exe can come back as a short-lived stub for the protocol call — tracking it would
+            // "exit" instantly and pop the launcher back up; TrackSteamGameAsync follows the real game.
+            if (game.ExecutablePath.StartsWith(SteamUriPrefix, StringComparison.OrdinalIgnoreCase)) process = null;
         }
         catch (Exception ex) when (ex is Win32Exception or FileNotFoundException)
         {
@@ -659,9 +672,52 @@ public partial class App : Application
         if (process is null)
         {
             _ = ClearLaunchingAfterDelayAsync(game);
+            // Steam hands the launch to the already-running client, so there's no Process — find the
+            // game's own process under steam.exe instead so overlay/resume/quit work like any other game.
+            if (game.ExecutablePath.StartsWith(SteamUriPrefix, StringComparison.OrdinalIgnoreCase))
+                _ = TrackSteamGameAsync(vm, game);
             return;
         }
 
+        TrackProcess(vm, game, process);
+    }
+
+    private const string SteamUriPrefix = "steam://rungameid/";
+
+    // ponytail: picks the first non-Steam child of steam.exe once RunningAppID matches; a game that
+    // spawns a launcher stub first is still covered since HandleGameProcessExitedAsync follows the tree.
+    private async Task TrackSteamGameAsync(MainViewModel vm, GameTileViewModel game)
+    {
+        string appId = game.ExecutablePath[SteamUriPrefix.Length..];
+        for (int i = 0; i < 90; i++)
+        {
+            await Task.Delay(1000);
+            if (_runningGameProcess is not null) return;
+
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            if (key?.GetValue("RunningAppID") is not int running || running.ToString() != appId) continue;
+
+            foreach (var steam in Process.GetProcessesByName("steam"))
+            {
+                foreach (int pid in ProcessTree.GetTreePids(steam.Id))
+                {
+                    try
+                    {
+                        var child = Process.GetProcessById(pid);
+                        if (child.ProcessName.StartsWith("steam", StringComparison.OrdinalIgnoreCase) ||
+                            child.ProcessName.StartsWith("gameoverlay", StringComparison.OrdinalIgnoreCase) ||
+                            child.ProcessName.StartsWith("crashhandler", StringComparison.OrdinalIgnoreCase)) continue;
+                        await Dispatcher.BeginInvoke(() => TrackProcess(vm, game, child));
+                        return;
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { }
+                }
+            }
+        }
+    }
+
+    private void TrackProcess(MainViewModel vm, GameTileViewModel game, Process process)
+    {
         // A real Process means the OS has genuinely launched it — no need to guess, clear immediately.
         game.IsLaunching = false;
 

@@ -24,6 +24,8 @@
 
             <Button x:Name="ReturnButton" Content="Return to Cartridge OS" Command="{Binding ReturnCommand}"
                     Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
+            <Button x:Name="ResumeButton" Content="Resume Game" Command="{Binding ResumeCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,8" />
             <Button x:Name="QuitButton" Content="Quit Game" Command="{Binding QuitGameCommand}"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Background="{StaticResource ErrorBrush}" Foreground="{StaticResource TextPrimaryBrush}"

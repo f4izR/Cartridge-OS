@@ -10,6 +10,7 @@ public sealed partial class OverlayViewModel : ViewModelBase
 {
     public string GameTitle { get; }
     public ICommand ReturnCommand { get; }
+    public ICommand ResumeCommand { get; }
     public ICommand QuitGameCommand { get; }
 
     /// <summary>Controller-specific glyph for the toggle-overlay button, e.g. "Start" (Xbox) or "Options" (PlayStation).</summary>
@@ -20,10 +21,11 @@ public sealed partial class OverlayViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isCursorLocked;
 
-    public OverlayViewModel(string gameTitle, Action onReturn, Action onQuitGame, ControllerKind? controller)
+    public OverlayViewModel(string gameTitle, Action onReturn, Action onResume, Action onQuitGame, ControllerKind? controller)
     {
         GameTitle = gameTitle;
         ReturnCommand = new RelayCommand(onReturn);
+        ResumeCommand = new RelayCommand(onResume);
         QuitGameCommand = new RelayCommand(onQuitGame);
         _menuButtonLabel = ControllerGlyphs.Label(controller ?? ControllerKind.Keyboard, GamepadAction.Power);
     }
